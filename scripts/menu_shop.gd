@@ -51,12 +51,20 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
 
+	var ess_row := HBoxContainer.new()
+	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	ess_row.add_theme_constant_override("separation", 6)
+	ess_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(ess_row)
+	var ess_icon := EssenceIcon.new()
+	ess_icon.custom_minimum_size = Vector2(22, 22)
+	ess_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ess_row.add_child(ess_icon)
 	_essence_label = Label.new()
-	_essence_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_essence_label.add_theme_font_size_override("font_size", 16)
 	_essence_label.add_theme_color_override("font_color", Color(0.55, 0.85, 1))
 	_essence_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_essence_label)
+	ess_row.add_child(_essence_label)
 
 	_champ_row = HBoxContainer.new()
 	_champ_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -128,7 +136,7 @@ func _make_tab_btn(txt: String, idx: int) -> Button:
 
 func _refresh() -> void:
 	if _essence_label:
-		_essence_label.text = "◆ %d Essência — ganhe limpando ondas e zerando fases" % StageData.essence(progress)
+		_essence_label.text = "%d Essência — ganhe limpando ondas e zerando fases" % StageData.essence(progress)
 	# destaque do campeão
 	for i in _champ_row.get_child_count():
 		var b := _champ_row.get_child(i) as Button

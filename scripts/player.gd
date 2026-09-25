@@ -65,6 +65,10 @@ var lean := 0.0
 var bob_t := 0.0
 var sh_w := 22.0
 var _part_t := 0.0
+# Anti-garra: empurra e não sai do lugar → cutuca de lado, depois teleporta.
+var _unstick_anchor := Vector2.ZERO
+var _unstick_t := 0.0
+var _unstick_stage := 0
 
 var world: World
 var controlled := true
@@ -270,13 +274,47 @@ func _physics_process(delta: float) -> void:
 	moving = vel.length() > 25.0
 
 	var step := vel * d
-	var nx := position.x + step.x
-	if not world.is_solid_at(nx, position.y):
-		position.x = nx
-	var ny := position.y + step.y
-	if not world.is_solid_at(position.x, ny):
-		position.y = ny
+	# Passo com corpo (raio): desliza na parede em vez de agarrar no canto.
+	position = MoveHelper.slide_step(world, position, step)
+	_watch_unstick(d, pushing)
 	queue_redraw()
+
+## Anti-garra do jogador: 0.7s empurrando sem sair do lugar → cutucada
+## de lado; se persistir → teleporta para o ponto livre mais próximo.
+func _watch_unstick(d: float, pushing: bool) -> void:
+	if world == null:
+		return
+	if not pushing:
+		_unstick_t = 0.0
+		_unstick_anchor = position
+		_unstick_stage = 0
+		return
+	_unstick_t += d
+	if _unstick_t < 0.7:
+		return
+	if position.distance_to(_unstick_anchor) >= 8.0:
+		_unstick_t = 0.0
+		_unstick_anchor = position
+		_unstick_stage = 0
+		return
+	_unstick_stage += 1
+	_unstick_t = 0.0
+	_unstick_anchor = position
+	if _unstick_stage == 1:
+		_nudge_side()
+	else:
+		var free := MoveHelper.find_free(world, position)
+		if free != Vector2.INF:
+			position = free
+		_unstick_stage = 0
+
+func _nudge_side() -> void:
+	var dir := vel.normalized() if vel.length() > 1.0 else Vector2.RIGHT
+	for s in [1.0, -1.0]:
+		var cand := position + Vector2(-dir.y, dir.x) * s * 26.0
+		if MoveHelper.can_enter(world, cand):
+			position = cand
+			break
 
 func _held(action_id: String) -> bool:
 	if not bind.has(action_id):

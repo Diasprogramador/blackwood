@@ -77,7 +77,8 @@ func _draw_top_left(p: Player) -> void:
 	var bank := 0
 	if main.get("progress") != null:
 		bank = StageData.essence(main.get("progress"))
-	draw_string(font, Vector2(x + 130, y + 80), "◆ %d" % bank,
+	EssenceIcon.draw_crystal(self, Vector2(x + 136, y + 74), 8.0)
+	draw_string(font, Vector2(x + 148, y + 80), "%d" % bank,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.85, 1))
 
 	if p.channeling:

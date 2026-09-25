@@ -34,8 +34,8 @@ var is_boss_flag := false
 var is_miniboss_flag := false
 var is_elite := false
 var stage_idx := 0
-# Desencalhe: se anda e não sai do lugar, contorna de lado por um tempo.
-# Se ficar 3s garrado (lago/mata fechada), busca outra rota livre.
+# Desencalhe em estágios: 0.5s contorna de lado, 1.5s busca outra rota,
+# 3s teleporta para o ponto livre mais próximo (MoveHelper).
 var _stuck_t := 0.0
 var _side := 0.0
 var _side_t := 0.0
@@ -189,34 +189,38 @@ func ai_update(player: Player, delta: float) -> void:
 		# Velocidade suavizada (acelera/desacelera, sem snap).
 		var want := dir * speed
 		evel = evel.lerp(want, 1.0 - exp(-8.0 * delta))
-		var dist_before := d
-		# Regra de fuga: quem está DENTRO do sólido sempre pode sair
-		# (mas nunca entrar) — evita paralisia total no lago/mata.
-		var cur_solid: bool = world.is_solid_at(position.x, position.y)
-		var nx := position.x + evel.x * delta
-		if cur_solid or not world.is_solid_at(nx, position.y):
-			position.x = nx
-		var ny := position.y + evel.y * delta
-		if cur_solid or not world.is_solid_at(position.x, ny):
-			position.y = ny
-		# Andou de verdade? Se quase não se aproximou, está grudado.
-		var gained: float = dist_before - position.distance_to(player.position)
+		var pos_before := position
+		# Passo com corpo (raio): não entra em vão apertado; quem já está
+		# DENTRO do sólido sempre pode sair — evita paralisia no lago/mata.
+		position = MoveHelper.slide_step(world, position, evel * delta)
+		# Andou de verdade? Deslocamento real (a aproximação ao player
+		# mentia: marcava "preso" com o player fugindo e "solto" tremendo
+		# parado enquanto o player se aproximava).
+		var moved: float = pos_before.distance_to(position)
 		if _has_detour:
 			pass  # desvio em andamento: não conta como preso nem solto
-		elif gained < speed * delta * 0.25:
+		elif moved < speed * delta * 0.25:
 			_stuck_t += delta
 			if _stuck_t >= 3.0:
-				# 3s garrado no lago/mata: abandona e pega outra rota livre.
+				# Último recurso: teleporta para o ponto livre mais próximo.
+				var free := MoveHelper.find_free(world, position)
+				if free != Vector2.INF:
+					position = free
+				_stuck_t = 0.0
+				_side = 0.0
+				_has_detour = false
+			elif _stuck_t >= 1.5 and not _has_detour:
+				# Garrado: abandona e pega outra rota livre.
 				if _pick_detour():
 					_has_detour = true
 					_detour_t = 2.5
 					_side = 0.0
 				else:
 					# Sem ponto livre por perto: tenta de novo em breve.
-					_stuck_t = 1.5
+					_stuck_t = 1.0
 					_side = -_side if _side != 0.0 else (1.0 if randf() < 0.5 else -1.0)
 					_side_t = 0.9
-			elif _stuck_t > 0.5 and _side == 0.0:
+			elif _stuck_t > 0.5 and _side == 0.0 and not _has_detour:
 				_side = 1.0 if randf() < 0.5 else -1.0
 				_side_t = 0.9
 		else:

@@ -52,12 +52,20 @@ func build(prog: Dictionary, stage: int, diff: int) -> void:
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
 
+	var ess_row := HBoxContainer.new()
+	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	ess_row.add_theme_constant_override("separation", 6)
+	ess_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(ess_row)
+	var ess_icon := EssenceIcon.new()
+	ess_icon.custom_minimum_size = Vector2(20, 20)
+	ess_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ess_row.add_child(ess_icon)
 	_essence_label = Label.new()
-	_essence_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_essence_label.add_theme_font_size_override("font_size", 15)
 	_essence_label.add_theme_color_override("font_color", Color(0.55, 0.85, 1))
 	_essence_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_essence_label)
+	ess_row.add_child(_essence_label)
 
 	var st_title := _section("— FASE (passe para liberar a próxima) —")
 	vbox.add_child(st_title)
@@ -198,7 +206,7 @@ func _refresh() -> void:
 			b.add_theme_stylebox_override("normal", MenuArt.style_btn(d_col, sel))
 			b.add_theme_color_override("font_color", d_col if sel else MenuArt.CREAM)
 	if _essence_label:
-		_essence_label.text = "◆ %d Essência" % StageData.essence(progress)
+		_essence_label.text = "%d Essência" % StageData.essence(progress)
 	if _info_label:
 		var gw := StageData.global_wave(selected_stage, 0)
 		_info_label.text = "Ondas %d-%d  •  %s + %s  •  ↑ ↓ fase  •  Q/E dificuldade" % [
