@@ -1116,7 +1116,7 @@ func mp_apply_players(a: Array, b: Array) -> void:
 	_apply_psnap(player, a)
 	_apply_psnap(player2, b)
 
-func _apply_psnap(pl, arr: Array) -> void:
+func _apply_psnap(pl: Player, arr: Array) -> void:
 	if pl == null or not is_instance_valid(pl) or arr.size() < 16:
 		return
 	var before: Vector2 = pl.position
