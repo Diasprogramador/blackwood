@@ -1,3 +1,29 @@
+# Godot 4.x
 .godot/
 *.tmp
 export_presets.cfg
+
+# Exports
+exports/
+*.apk
+*.aab
+*.exe
+*.pck
+*.zip
+
+# Mono / C#
+.mono/
+data_*/
+*.sln
+*.csproj
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Backups do editor
+*~
+*.bak
+*.orig
