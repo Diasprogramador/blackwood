@@ -155,11 +155,11 @@ func _ready() -> void:
 
 	_enter_menu()
 
-func _overlay_btn(txt: String) -> Button:
+func _overlay_btn(txt: String, accent := Color(1.0, 0.85, 0.4)) -> Button:
 	var b := Button.new()
 	b.text = txt
 	b.custom_minimum_size = Vector2(220, 44)
-	MenuArt.apply_menu_btn(b, MenuArt.GOLD)
+	MenuArt.apply_menu_btn(b, accent)
 	return b
 
 func _build_pause_ui(parent: Node) -> void:
@@ -178,7 +178,7 @@ func _build_pause_ui(parent: Node) -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT, false)
 	pause_layer.add_child(center)
 
-	var panel := PanelContainer.new()
+	var panel := MenuArt.FramePanel.new()
 	panel.add_theme_stylebox_override("panel", MenuArt.style_panel())
 	center.add_child(panel)
 
@@ -188,6 +188,7 @@ func _build_pause_ui(parent: Node) -> void:
 
 	var lbl := MenuArt.title_label_gold("PAUSADO", 36)
 	v.add_child(lbl)
+	v.add_child(MenuArt.EmblemMoon.new())
 
 	var sub := Label.new()
 	sub.text = "Respire — a Rift espera por você."
@@ -212,12 +213,12 @@ func _build_gameover_ui(parent: Node) -> void:
 	gameover_layer.mouse_filter = Control.MOUSE_FILTER_STOP
 	parent.add_child(gameover_layer)
 
-	var dim := ColorRect.new()
-	dim.color = Color(0.1, 0, 0, 0.72)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT, false)
-	gameover_layer.add_child(dim)
+	var veil := MenuArt.EmberVeil.new()
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	gameover_layer.add_child(veil)
 
-	var panel := PanelContainer.new()
+	var panel := MenuArt.FramePanel.new()
+	panel.accent = Color(0.8, 0.25, 0.25)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(460, 300)
 	panel.position = Vector2(-230, -150)
@@ -239,6 +240,7 @@ func _build_gameover_ui(parent: Node) -> void:
 	title.add_theme_font_size_override("font_size", 44)
 	title.add_theme_color_override("font_color", Color(0.95, 0.25, 0.25))
 	v.add_child(title)
+	v.add_child(MenuArt.EmblemSkull.new())
 
 	var kills := Label.new()
 	kills.name = "Kills"
@@ -266,11 +268,11 @@ func _build_gameover_ui(parent: Node) -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(row)
 
-	var again := _overlay_btn("🔄 De novo  (R)")
+	var again := _overlay_btn("🔄 De novo  (R)", Color(0.85, 0.32, 0.3))
 	again.pressed.connect(func(): start_game())
 	row.add_child(again)
 
-	var menu := _overlay_btn("🏠 Menu  (ENTER)")
+	var menu := _overlay_btn("🏠 Menu  (ENTER)", Color(0.85, 0.32, 0.3))
 	menu.pressed.connect(func(): _enter_menu())
 	row.add_child(menu)
 
@@ -281,12 +283,14 @@ func _build_victory_ui(parent: Node) -> void:
 	victory_layer.mouse_filter = Control.MOUSE_FILTER_STOP
 	parent.add_child(victory_layer)
 
-	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.12, 0.05, 0.78)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT, false)
-	victory_layer.add_child(dim)
+	var veil := MenuArt.EmberVeil.new()
+	veil.dim = Color(0.02, 0.08, 0.03, 0.78)
+	veil.ember = Color(1, 0.85, 0.3)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	victory_layer.add_child(veil)
 
-	var panel := PanelContainer.new()
+	var panel := MenuArt.FramePanel.new()
+	panel.accent = Color(0.5, 0.9, 0.45)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(460, 300)
 	panel.position = Vector2(-230, -150)
@@ -308,6 +312,7 @@ func _build_victory_ui(parent: Node) -> void:
 	title.add_theme_font_size_override("font_size", 36)
 	title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
 	v.add_child(title)
+	v.add_child(MenuArt.EmblemStar.new())
 
 	var info := Label.new()
 	info.name = "Info"
@@ -340,11 +345,11 @@ func _build_victory_ui(parent: Node) -> void:
 	row2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(row2)
 
-	var again2 := _overlay_btn("🔄 De novo  (R)")
+	var again2 := _overlay_btn("🔄 De novo  (R)", Color(0.45, 0.9, 0.5))
 	again2.pressed.connect(func(): start_game())
 	row2.add_child(again2)
 
-	var menu2 := _overlay_btn("🏠 Menu  (ENTER)")
+	var menu2 := _overlay_btn("🏠 Menu  (ENTER)", Color(0.45, 0.9, 0.5))
 	menu2.pressed.connect(func(): _enter_menu())
 	row2.add_child(menu2)
 

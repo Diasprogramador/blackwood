@@ -28,7 +28,7 @@ func build(d: Dictionary) -> void:
 	margin.add_theme_constant_override("margin_bottom", 14)
 	add_child(margin)
 
-	var panel := PanelContainer.new()
+	var panel := MenuArt.FramePanel.new()
 	panel.add_theme_stylebox_override("panel", MenuArt.style_panel())
 	margin.add_child(panel)
 
@@ -114,10 +114,10 @@ func _add_slider(parent: VBoxContainer, label: String, key: String) -> void:
 	val.add_theme_color_override("font_color", MenuArt.CREAM)
 	val.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(val)
-	val.text = "%d" % int(slider.value)
+	val.text = "%d%%" % int(slider.value)
 	slider.value_changed.connect(func(v):
 		data[key] = int(v)
-		val.text = "%d" % int(v)
+		val.text = "%d%%" % int(v)
 		GameSettings.save_data(data)
 		Sfx.apply_volumes(data)
 	)
@@ -133,18 +133,23 @@ func _add_toggle(parent: VBoxContainer, label: String, key: String) -> void:
 	l.add_theme_color_override("font_color", MenuArt.CREAM)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(l)
-	var chk := CheckButton.new()
-	chk.button_pressed = bool(data.get(key, false))
-	chk.text = "ligado" if chk.button_pressed else "desligado"
-	row.add_child(chk)
-	chk.toggled.connect(func(v):
-		data[key] = v
-		chk.text = "ligado" if v else "desligado"
+	var tgl := Button.new()
+	tgl.custom_minimum_size = Vector2(170, 32)
+	_refresh_toggle(tgl, key)
+	row.add_child(tgl)
+	tgl.pressed.connect(func():
+		data[key] = not bool(data.get(key, false))
 		GameSettings.save_data(data)
 		if key == "fullscreen":
 			GameSettings.apply_video(data)
 		Sfx.play(self, "click")
+		_refresh_toggle(tgl, key)
 	)
+
+func _refresh_toggle(b: Button, key: String) -> void:
+	var on := bool(data.get(key, false))
+	b.text = "✔ LIGADO" if on else "✖ DESLIGADO"
+	MenuArt.apply_small_btn(b, Color(0.4, 0.85, 0.45) if on else Color(0.8, 0.4, 0.4), 14)
 
 func _add_key_row(parent: VBoxContainer, action_id: String, label: String) -> void:
 	var row := HBoxContainer.new()
@@ -159,7 +164,7 @@ func _add_key_row(parent: VBoxContainer, action_id: String, label: String) -> vo
 	row.add_child(l)
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(150, 32)
-	MenuArt.apply_small_btn(b, Color(0.5, 0.75, 1.0), 14)
+	MenuArt.apply_keycap(b)
 	var aid := action_id
 	b.pressed.connect(func():
 		_capturing = aid
@@ -171,12 +176,12 @@ func _add_key_row(parent: VBoxContainer, action_id: String, label: String) -> vo
 func _refresh_keys() -> void:
 	for aid in _rows.keys():
 		var b: Button = _rows[aid]
-		if aid == _capturing:
+		var capturing: bool = aid == _capturing
+		MenuArt.apply_keycap(b, capturing)
+		if capturing:
 			b.text = "pressione…"
-			b.add_theme_color_override("font_color", Color(1, 0.45, 0.4))
 		else:
 			b.text = GameSettings.key_label(data, aid)
-			b.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
 
 func _input(event: InputEvent) -> void:
 	if _capturing == "" or not visible:
@@ -207,6 +212,7 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)
+	MenuArt.draw_screen_frame(self, size)
 
 func handle_key(key: int) -> bool:
 	if _capturing != "":
