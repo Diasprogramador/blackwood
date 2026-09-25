@@ -32,7 +32,12 @@ static var _tex := {}
 static func tex(rel: String) -> Texture2D:
 	if _tex.has(rel):
 		return _tex[rel]
-	var t: Texture2D = load(ROOT + rel)
+	# Sem PNGs no projeto (arte 100% procedural): checa antes para
+	# não cuspir erro de load no depurador.
+	var path := ROOT + rel
+	var t: Texture2D = null
+	if ResourceLoader.exists(path):
+		t = load(path)
 	_tex[rel] = t
 	return t
 

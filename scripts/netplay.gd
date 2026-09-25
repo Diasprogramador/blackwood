@@ -31,10 +31,11 @@ func is_client() -> bool:
 	return mode == 2
 
 func _ready() -> void:
-	get_tree().multiplayer.peer_connected.connect(_on_peer_connected)
-	get_tree().multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	get_tree().multiplayer.connected_to_server.connect(func(): server_ready.emit())
-	get_tree().multiplayer.connection_failed.connect(func(): connect_failed.emit())
+	var mp := get_tree().get_multiplayer()
+	mp.peer_connected.connect(_on_peer_connected)
+	mp.peer_disconnected.connect(_on_peer_disconnected)
+	mp.connected_to_server.connect(func(): server_ready.emit())
+	mp.connection_failed.connect(func(): connect_failed.emit())
 
 func _on_peer_connected(id: int) -> void:
 	peer_joined.emit(id)
@@ -44,7 +45,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func has_ally() -> bool:
 	if mode == 1:
-		return get_tree().multiplayer.get_peers().size() > 0
+		return get_tree().get_multiplayer().get_peers().size() > 0
 	return mode == 2
 
 # ----------------------------------------------------------------------
@@ -58,7 +59,7 @@ func host(port := PORT) -> String:
 	if err != OK:
 		return "Falha ao hospedar (porta %d ocupada?)" % port
 	peer = p
-	get_tree().multiplayer.multiplayer_peer = peer
+	get_tree().get_multiplayer().multiplayer_peer = peer
 	mode = 1
 	upnp_info = _try_upnp(port)
 	return ""
@@ -73,7 +74,7 @@ func join(ip: String, port := PORT) -> String:
 	if err != OK:
 		return "Falha ao conectar."
 	peer = p
-	get_tree().multiplayer.multiplayer_peer = peer
+	get_tree().get_multiplayer().multiplayer_peer = peer
 	mode = 2
 	return ""
 
@@ -81,7 +82,7 @@ func leave() -> void:
 	if peer != null:
 		peer.close()
 		peer = null
-	get_tree().multiplayer.multiplayer_peer = null
+	get_tree().get_multiplayer().multiplayer_peer = null
 	mode = 0
 
 func _pick_local_ip() -> String:

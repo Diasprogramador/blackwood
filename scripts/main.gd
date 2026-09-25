@@ -41,6 +41,7 @@ var msg_last := ""
 var msg_seen := 0
 var mp_prev := {}
 var net_id_counter := 0
+var mp_client_id := -1
 var kill_count := 0
 var game_time := 0.0
 var minimap_tex: ImageTexture
@@ -525,12 +526,17 @@ func _mp_connect_failed() -> void:
 	mult_ui.build_join("Falha: host offline ou IP/porta errados.")
 
 func _mp_peer_joined(_id: int) -> void:
-	if mp == 1 and state == State.MULTI:
-		mult_ui.set_status("Amigo conectado! Escolha seu campeão →")
+	if mp == 1:
+		mp_client_id = _id
+		if state == State.MULTI:
+			mult_ui.set_status("Amigo conectado! Escolha seu campeão →")
 	elif state == State.PLAY:
 		say("Amigo entrou na arena!")
 
 func _mp_peer_left(_id: int) -> void:
+	if mp == 1 and _id != mp_client_id:
+		return  # sinal espúrio com id desconhecido: ignora
+	mp_client_id = -1
 	if mp == 1:
 		mp_ally_ready = false
 		if state == State.PLAY and player2 != null:

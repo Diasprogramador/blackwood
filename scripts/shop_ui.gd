@@ -341,7 +341,7 @@ func _on_buy_item(idx: int) -> void:
 		main.mp_buy_item(idx)
 		return
 	var p: Player = main.player
-	var clone := main._clone_shop_item(_shop_items[idx])
+	var clone: Item = main._clone_shop_item(_shop_items[idx])
 	if clone == null:
 		return
 	if p.buy_item(clone):
