@@ -16,7 +16,8 @@ static func draw_back(node: CanvasItem, size: Vector2, tick: float) -> void:
 		return
 	_draw_sky(node, w, h)
 	_draw_stars(node, w, h)
-	_draw_moon(node, w, h)
+	_draw_moon(node, w, h, tick)
+	_draw_shooting(node, w, h, tick)
 	_draw_pines(node, w, h, 0.52, Color(0.08, 0.14, 0.13), 46.0)
 	_draw_ground(node, w, h)
 	_draw_pines(node, w, h, 0.60, Color(0.04, 0.08, 0.07), 70.0)
@@ -48,12 +49,24 @@ static func _draw_stars(node: CanvasItem, w: float, h: float) -> void:
 		var a := 0.25 + 0.55 * float(hash(i * 5 + 3) % 100) / 100.0
 		node.draw_circle(Vector2(hx * w, hy * h), 1.2, Color(1, 0.95, 0.85, a))
 
-static func _draw_moon(node: CanvasItem, w: float, h: float) -> void:
+static func _draw_moon(node: CanvasItem, w: float, h: float, tick: float) -> void:
 	var m := Vector2(w * 0.72, h * 0.20)
-	node.draw_circle(m, 46, Color(0.95, 0.85, 0.65, 0.12))
+	var breathe := 0.5 + 0.5 * sin(tick * 0.05)
+	node.draw_circle(m, 46 + breathe * 5.0, Color(0.95, 0.85, 0.65, 0.10 + breathe * 0.05))
 	node.draw_circle(m, 30, Color(0.95, 0.85, 0.65, 0.18))
 	node.draw_circle(m, 20, Color(0.96, 0.90, 0.74))
 	node.draw_circle(m + Vector2(-6, -4), 15, Color(0.90, 0.83, 0.66))
+
+## Estrela cadente a cada ~7s.
+static func _draw_shooting(node: CanvasItem, w: float, h: float, tick: float) -> void:
+	var k := fmod(tick, 420.0) / 60.0  # segundos no ciclo
+	if k >= 1.2:
+		return
+	var a := clampf((1.2 - k) / 1.2, 0.0, 1.0)
+	var head := Vector2(w * 0.85 - k * 260.0, h * 0.08 + k * 90.0)
+	var tail := head + Vector2(46, -32)
+	node.draw_line(tail, head, Color(1, 0.95, 0.85, 0.55 * a), 2.0)
+	node.draw_circle(head, 2.2, Color(1, 1, 1, 0.9 * a))
 
 static func _pine(node: CanvasItem, x: float, base_y: float, pw: float, ph: float, c: Color) -> void:
 	for k in 3:
@@ -210,6 +223,93 @@ static func title_label(txt: String, fsize: int) -> Label:
 	l.add_theme_constant_override("shadow_offset_x", 2)
 	l.add_theme_constant_override("shadow_offset_y", 3)
 	return l
+
+## Título dourado (telas principais).
+static func title_label_gold(txt: String, fsize: int) -> Label:
+	var l := title_label(txt, fsize)
+	l.add_theme_color_override("font_color", GOLD)
+	l.add_theme_color_override("font_shadow_color", Color(0.3, 0.15, 0.0, 0.9))
+	return l
+
+## Cabeçalho de seção ("— ÁUDIO —" etc.).
+static func section_label(txt: String) -> Label:
+	var l := Label.new()
+	l.text = "— %s —" % txt
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", GOLD)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 2)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+## Ornamento divisor: linha ◆ linha.
+static func divider(accent := GOLD) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for side in [0, 1]:
+		var line := ColorRect.new()
+		line.color = Color(accent, 0.5)
+		line.custom_minimum_size = Vector2(120, 2)
+		line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(line)
+		if side == 0:
+			var mid := Label.new()
+			mid.text = "◆"
+			mid.add_theme_font_size_override("font_size", 12)
+			mid.add_theme_color_override("font_color", accent)
+			mid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(mid)
+	return row
+
+## Cartão (escolha de campeão): borda e brilho na cor do dono.
+static func style_card(accent: Color, selected: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.14, 0.13, 0.20, 0.98) if selected else Color(0.10, 0.10, 0.16, 0.95)
+	sb.border_color = Color(1, 0.85, 0.3) if selected else accent.darkened(0.25)
+	sb.set_border_width_all(3 if selected else 2)
+	sb.set_corner_radius_all(12)
+	sb.shadow_color = Color(1, 0.85, 0.3, 0.35) if selected else Color(accent, 0.25)
+	sb.shadow_size = 12 if selected else 6
+	sb.content_margin_top = 8.0
+	sb.content_margin_bottom = 8.0
+	sb.content_margin_left = 8.0
+	sb.content_margin_right = 8.0
+	return sb
+
+## Linha de loja (botão com barra lateral de destaque).
+static func style_row(accent: Color, hover := false, pressed := false) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	if pressed:
+		sb.bg_color = Color(accent.r * 0.28, accent.g * 0.28, accent.b * 0.28, 0.98)
+	elif hover:
+		sb.bg_color = Color(0.14, 0.15, 0.18, 0.97)
+	else:
+		sb.bg_color = Color(0.09, 0.10, 0.13, 0.95)
+	sb.border_color = Color(0.35, 0.33, 0.30) if not hover and not pressed else accent
+	sb.set_border_width_all(1)
+	sb.border_width_left = 5
+	sb.set_corner_radius_all(8)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
+
+static func apply_row_btn(b: Button, accent: Color) -> void:
+	b.add_theme_stylebox_override("normal", style_row(accent))
+	b.add_theme_stylebox_override("hover", style_row(accent, true))
+	b.add_theme_stylebox_override("pressed", style_row(accent, false, true))
+	b.add_theme_stylebox_override("disabled", style_row(Color(0.4, 0.4, 0.42)))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_color_override("font_color", CREAM)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
+	b.add_theme_color_override("font_pressed_color", GOLD)
+	b.add_theme_color_override("font_disabled_color", Color(0.45, 0.45, 0.48))
 
 static func spark() -> String:
 	return "✦"

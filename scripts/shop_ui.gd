@@ -133,8 +133,9 @@ func _build() -> void:
 
 		var row_sb := StyleBoxFlat.new()
 		row_sb.bg_color = Color(0.11, 0.16, 0.12, 0.95)
-		row_sb.border_color = Color(0.3, 0.42, 0.3, 0.8)
+		row_sb.border_color = Color(0.79, 0.64, 0.15, 0.85)
 		row_sb.set_border_width_all(1)
+		row_sb.border_width_left = 5
 		row_sb.set_corner_radius_all(8)
 		row_sb.content_margin_left = 12
 		row_sb.content_margin_right = 12
@@ -153,6 +154,8 @@ func _build() -> void:
 
 		row.add_theme_color_override("font_color", Color(0.92, 0.94, 0.88))
 		row.add_theme_color_override("font_hover_color", Color.WHITE)
+		row.add_theme_color_override("font_pressed_color", MenuArt.GOLD)
+		row.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		row.add_theme_font_size_override("font_size", 15)
 
 		var cost := Label.new()
@@ -216,6 +219,7 @@ func _build() -> void:
 		row_sb.bg_color = Color(0.1, 0.14, 0.18, 0.95)
 		row_sb.border_color = Color(item_accents[i].r, item_accents[i].g, item_accents[i].b, 0.85)
 		row_sb.set_border_width_all(1)
+		row_sb.border_width_left = 5
 		row_sb.set_corner_radius_all(8)
 		row_sb.set_content_margin_all(6)
 		row_sb.content_margin_left = 12
@@ -233,6 +237,8 @@ func _build() -> void:
 
 		row.add_theme_color_override("font_color", Color(0.88, 0.93, 0.96))
 		row.add_theme_color_override("font_hover_color", Color.WHITE)
+		row.add_theme_color_override("font_pressed_color", MenuArt.GOLD)
+		row.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		row.add_theme_font_size_override("font_size", 14)
 
 		var cost := Label.new()

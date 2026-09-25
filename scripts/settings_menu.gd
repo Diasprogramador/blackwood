@@ -36,8 +36,9 @@ func build(d: Dictionary) -> void:
 	vbox.add_theme_constant_override("separation", 8)
 	panel.add_child(vbox)
 
-	var title := MenuArt.title_label("CONFIGURAÇÕES", 34)
+	var title := MenuArt.title_label_gold("CONFIGURAÇÕES", 34)
 	vbox.add_child(title)
+	vbox.add_child(MenuArt.divider())
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -86,13 +87,7 @@ func build(d: Dictionary) -> void:
 	_refresh_keys()
 
 func _add_section(parent: VBoxContainer, txt: String) -> void:
-	var l := Label.new()
-	l.text = txt
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", 15)
-	l.add_theme_color_override("font_color", MenuArt.GOLD)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(l)
+	parent.add_child(MenuArt.section_label(txt.trim_prefix("— ").trim_suffix(" —")))
 
 func _add_slider(parent: VBoxContainer, label: String, key: String) -> void:
 	var row := HBoxContainer.new()
@@ -178,8 +173,10 @@ func _refresh_keys() -> void:
 		var b: Button = _rows[aid]
 		if aid == _capturing:
 			b.text = "pressione…"
+			b.add_theme_color_override("font_color", Color(1, 0.45, 0.4))
 		else:
 			b.text = GameSettings.key_label(data, aid)
+			b.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
 
 func _input(event: InputEvent) -> void:
 	if _capturing == "" or not visible:

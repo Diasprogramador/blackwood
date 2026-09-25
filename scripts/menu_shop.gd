@@ -47,9 +47,10 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(vbox)
 
-	var title := MenuArt.title_label("⚜  LOJA", 34)
+	var title := MenuArt.title_label_gold("⚜  LOJA", 34)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
+	vbox.add_child(MenuArt.divider())
 
 	var ess_row := HBoxContainer.new()
 	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -164,11 +165,7 @@ func _row_base(accent: Color) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(1, 56)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	var sb := MenuArt.style_btn(accent, false)
-	b.add_theme_stylebox_override("normal", sb)
-	b.add_theme_stylebox_override("hover", sb)
-	b.add_theme_stylebox_override("pressed", sb)
-	b.add_theme_stylebox_override("disabled", sb)
+	MenuArt.apply_row_btn(b, accent)
 	b.add_theme_color_override("font_color", MenuArt.CREAM)
 	b.add_theme_font_size_override("font_size", 14)
 	return b

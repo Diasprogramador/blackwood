@@ -89,7 +89,7 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(vbox)
 
-	var title := MenuArt.title_label("ESCOLHA SEU CAMPEÃO", 40)
+	var title := MenuArt.title_label_gold("ESCOLHA SEU CAMPEÃO", 40)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
 
@@ -100,6 +100,7 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	sub.add_theme_color_override("font_color", Color(0.78, 0.78, 0.78))
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(sub)
+	vbox.add_child(MenuArt.divider())
 
 	var center := CenterContainer.new()
 	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -164,16 +165,8 @@ func _make_card(c: Dictionary, i: int) -> PanelContainer:
 	card.custom_minimum_size = Vector2(CARD_W, CARD_H)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.1, 0.1, 0.16, 0.95)
-	sb.border_color = Color(0.4, 0.4, 0.5)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(12)
-	sb.content_margin_top = 8.0
-	sb.content_margin_bottom = 8.0
-	sb.content_margin_left = 8.0
-	sb.content_margin_right = 8.0
-	card.add_theme_stylebox_override("panel", sb)
+	var col: Color = c.color
+	card.add_theme_stylebox_override("panel", MenuArt.style_card(col, i == selected_index))
 
 	var inner := VBoxContainer.new()
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -247,11 +240,9 @@ func _add_stat(parent: VBoxContainer, label: String, val: int, mx: int, col: Col
 
 func _refresh() -> void:
 	for i in _cards.size():
-		var sb: StyleBoxFlat = _cards[i].get_theme_stylebox("panel")
 		var sel := i == selected_index
-		sb.border_color = Color(1, 0.85, 0.3) if sel else Color(0.4, 0.4, 0.5)
-		sb.set_border_width_all(3 if sel else 2)
-		sb.bg_color = Color(0.14, 0.14, 0.22, 0.98) if sel else Color(0.1, 0.1, 0.16, 0.95)
+		var col: Color = ChampData.CHAMPS[i].color
+		_cards[i].add_theme_stylebox_override("panel", MenuArt.style_card(col, sel))
 		_cards[i].queue_redraw()
 		if i < _portraits.size():
 			_portraits[i].active = sel

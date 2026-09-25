@@ -48,9 +48,10 @@ func build(prog: Dictionary, stage: int, diff: int) -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(vbox)
 
-	var title := MenuArt.title_label("ESCOLHA A FASE", 40)
+	var title := MenuArt.title_label_gold("ESCOLHA A FASE", 40)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
+	vbox.add_child(MenuArt.divider())
 
 	var ess_row := HBoxContainer.new()
 	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -130,13 +131,7 @@ func build(prog: Dictionary, stage: int, diff: int) -> void:
 	_refresh()
 
 func _section(txt: String) -> Label:
-	var l := Label.new()
-	l.text = txt
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", 15)
-	l.add_theme_color_override("font_color", MenuArt.GOLD)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return l
+	return MenuArt.section_label(txt.trim_prefix("— ").trim_suffix(" —"))
 
 func _make_stage_btn(s: int) -> Button:
 	var b := Button.new()
@@ -182,7 +177,11 @@ func _refresh() -> void:
 			b.disabled = true
 			b.modulate = Color(0.5, 0.5, 0.55)
 		else:
-			var mark := " ✔" if StageData.is_cleared(progress, s, selected_diff) else ""
+			var clears := 0
+			for dd in StageData.DIFFS.size():
+				if StageData.is_cleared(progress, s, dd):
+					clears += 1
+			var mark := "  ✔ %d/%d" % [clears, StageData.DIFFS.size()] if clears > 0 else ""
 			b.text = "Fase %d: %s%s\nBoss: %s" % [s + 1, str(st.get("name", "?")), mark, str(st.get("boss", "?"))]
 			b.disabled = false
 			b.modulate = Color.WHITE

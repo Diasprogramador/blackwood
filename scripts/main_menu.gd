@@ -45,7 +45,7 @@ func build(bank: int) -> void:
 	spacer_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(spacer_top)
 
-	var title := MenuArt.title_label("BLACKWOOD", 84)
+	var title := MenuArt.title_label_gold("BLACKWOOD", 84)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
 
@@ -53,6 +53,7 @@ func build(bank: int) -> void:
 	sub.add_theme_color_override("font_color", MenuArt.GOLD)
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(sub)
+	vbox.add_child(MenuArt.divider())
 
 	var spacer_mid := Control.new()
 	spacer_mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -67,10 +68,10 @@ func build(bank: int) -> void:
 	opts.add_theme_constant_override("separation", 10)
 	center.add_child(opts)
 
-	_add_opt(opts, "Jogar  ✧", 0)
-	_add_opt(opts, "Loja  ✧", 1)
-	_add_opt(opts, "Configurações  ✧", 2)
-	_add_opt(opts, "Sair  ✧", 3)
+	_add_opt(opts, "⚔  Jogar  ✧", 0)
+	_add_opt(opts, "◆  Loja  ✧", 1)
+	_add_opt(opts, "⚙  Configurações  ✧", 2)
+	_add_opt(opts, "✕  Sair  ✧", 3)
 
 	var ess_row := HBoxContainer.new()
 	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -94,6 +95,14 @@ func build(bank: int) -> void:
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hint)
+
+	var ver := Label.new()
+	ver.text = "Blackwood v1.0  •  Godot 4.7"
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ver.add_theme_font_size_override("font_size", 11)
+	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
+	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(ver)
 
 	_refresh()
 
