@@ -58,6 +58,7 @@ func build(d: Dictionary) -> void:
 	_add_section(box, "— VÍDEO —")
 	_add_toggle(box, "Tela cheia", "fullscreen")
 	_add_toggle(box, "Tremor de tela", "shake")
+	_add_touch_row(box)
 
 	_add_section(box, "— TECLAS (clique e pressione a nova tecla) —")
 	for a in GameSettings.ACTIONS:
@@ -150,6 +151,33 @@ func _refresh_toggle(b: Button, key: String) -> void:
 	var on := bool(data.get(key, false))
 	b.text = "✔ LIGADO" if on else "✖ DESLIGADO"
 	MenuArt.apply_small_btn(b, Color(0.4, 0.85, 0.45) if on else Color(0.8, 0.4, 0.4), 14)
+
+func _add_touch_row(parent: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = "Controles touch"
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", MenuArt.CREAM)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(l)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(170, 32)
+	_refresh_touch(b)
+	row.add_child(b)
+	b.pressed.connect(func():
+		data["touch"] = (int(data.get("touch", 0)) + 1) % 3
+		GameSettings.save_data(data)
+		Sfx.play(self, "click")
+		_refresh_touch(b)
+	)
+
+func _refresh_touch(b: Button) -> void:
+	var m := int(data.get("touch", 0))
+	b.text = ["Automático", "Sempre", "Nunca"][clampi(m, 0, 2)]
+	MenuArt.apply_small_btn(b, Color(0.55, 0.85, 1), 14)
 
 func _add_key_row(parent: VBoxContainer, action_id: String, label: String) -> void:
 	var row := HBoxContainer.new()

@@ -42,6 +42,7 @@ var msg_seen := 0
 var mp_prev := {}
 var net_id_counter := 0
 var mp_client_id := -1
+var touch_ui: TouchControls = null
 var kill_count := 0
 var game_time := 0.0
 var minimap_tex: ImageTexture
@@ -190,6 +191,16 @@ func _ready() -> void:
 	mult_ui.cancel_pressed.connect(_mp_lobby_cancel)
 	mult_ui.set_anchors_preset(Control.PRESET_FULL_RECT, false)
 	ui_root.add_child(mult_ui)
+
+	var touch_layer := CanvasLayer.new()
+	touch_layer.name = "TouchLayer"
+	touch_layer.layer = 30
+	add_child(touch_layer)
+	touch_ui = TouchControls.new()
+	touch_ui.name = "Touch"
+	touch_ui.main = self
+	touch_ui.visible = false
+	touch_layer.add_child(touch_ui)
 
 	_build_pause_ui(ui_root)
 	_build_gameover_ui(ui_root)
@@ -844,6 +855,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if player == null or not is_instance_valid(player):
 		return
+	_update_touch()
 	if mp == 2:
 		_client_play_tick(delta)
 		return
@@ -1101,10 +1113,65 @@ func _send_input_tick(delta: float) -> void:
 	if GameSettings.held(settings, "move_right"): mv.x += 1.0
 	if mv.length() > 1.0:
 		mv = mv.normalized()
+	if touch_ui != null and touch_ui.visible:
+		var td := touch_ui.pad_dir()
+		if td != Vector2.ZERO:
+			mv = td
 	var sk := []
 	for i in 5:
 		sk.append(_edge("skill%d" % (i + 1)))
 	netplay.send_input(mv, _edge("attack"), sk, _edge("channel"), _edge("item"))
+
+func touch_active() -> bool:
+	var m := int(settings.get("touch", 0))
+	if m == 1:
+		return true
+	if m == 2:
+		return false
+	return DisplayServer.is_touchscreen_available()
+
+func _update_touch() -> void:
+	if touch_ui == null:
+		return
+	var show := touch_active() and state == State.PLAY
+	touch_ui.visible = show
+	var td := Vector2.ZERO
+	if show:
+		td = touch_ui.pad_dir()
+		touch_ui.player_ref = player
+	if player != null and is_instance_valid(player):
+		player.touch_move = td
+	if player2 != null and is_instance_valid(player2):
+		player2.touch_move = td
+
+func touch_button(id: String) -> void:
+	if state == State.SHOP:
+		if id == "shop" or id == "pause":
+			_close_shop()
+		return
+	if state != State.PLAY:
+		return
+	if shop.visible:
+		if id == "shop" or id == "pause":
+			_close_shop()
+		return
+	match id:
+		"attack":
+			_do_basic_attack()
+		"channel":
+			_toggle_channel()
+		"item":
+			_use_first_item()
+		"shop":
+			_open_shop()
+		"pause":
+			if mp != 0:
+				say("Sem pausa no multiplayer!")
+			else:
+				_set_pause(true)
+		_:
+			if id.begins_with("skill"):
+				_do_cast(int(id.trim_prefix("skill")) - 1)
 
 func _edge(action_id: String) -> bool:
 	var keys: Dictionary = settings.get("keys", {})
@@ -1114,6 +1181,8 @@ func _edge(action_id: String) -> bool:
 			if Input.is_physical_key_pressed(int(code)):
 				now = true
 				break
+	if touch_ui != null and touch_ui.visible and touch_ui.is_down(action_id):
+		now = true
 	var was := bool(mp_prev.get(action_id, false))
 	mp_prev[action_id] = now
 	return now and not was

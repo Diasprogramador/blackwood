@@ -8,6 +8,10 @@ Escolha um campeão, vença **3 fases x 5 ondas (15 ondas)**, com mini-bosses, b
 
 Baixe a última versão em **[Releases](https://github.com/Diasprogramador/blackwood/releases)**, extraia o zip e rode `blackwood.exe`. Para o co-op online, os dois precisam da mesma versão: um hospeda em **👥 Multiplayer** e passa o IP (ou usem Radmin VPN/ZeroTier).
 
+## Jogar (Android)
+
+Baixe o `.apk` da **[Releases](https://github.com/Diasprogramador/blackwood/releases)**, instale (permita fontes desconhecidas) e jogue em **paisagem**: joystick virtual à esquerda, botões de ataque/skills à direita. O co-op funciona entre PC e celular na mesma versão.
+
 ## Como rodar
 
 1. Instale o **Godot 4.7** (renderer `gl_compatibility`).

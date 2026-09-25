@@ -18,9 +18,16 @@ config/icon="res://icon.svg"
 
 [display]
 
+window/size/resizable=true
 window/size/viewport_width=960
 window/size/viewport_height=640
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
 
 [gui]
 
@@ -30,4 +37,5 @@ theme/custom="res://theme/game_theme.tres"
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.08, 0.1, 0.07, 1)

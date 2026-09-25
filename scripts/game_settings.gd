@@ -29,7 +29,7 @@ static func default_data() -> Dictionary:
 		keys[a.id] = (a.def as Array).duplicate()
 	return {
 		"master": 80, "music": 70, "sfx": 90,
-		"fullscreen": false, "shake": true,
+		"fullscreen": false, "shake": true, "touch": 0,
 		"keys": keys,
 	}
 
@@ -43,6 +43,7 @@ static func load_data() -> Dictionary:
 	d["sfx"] = clampi(int(cfg.get_value("audio", "sfx", 90)), 0, 100)
 	d["fullscreen"] = bool(cfg.get_value("video", "fullscreen", false))
 	d["shake"] = bool(cfg.get_value("video", "shake", true))
+	d["touch"] = clampi(int(cfg.get_value("video", "touch", 0)), 0, 2)
 	var keys: Dictionary = d["keys"]
 	for a in ACTIONS:
 		var loaded = cfg.get_value("keys", a.id, [])
@@ -60,6 +61,7 @@ static func save_data(d: Dictionary) -> void:
 	cfg.set_value("audio", "sfx", int(d.get("sfx", 90)))
 	cfg.set_value("video", "fullscreen", bool(d.get("fullscreen", false)))
 	cfg.set_value("video", "shake", bool(d.get("shake", true)))
+	cfg.set_value("video", "touch", clampi(int(d.get("touch", 0)), 0, 2))
 	var keys: Dictionary = d.get("keys", {})
 	for a in ACTIONS:
 		if keys.has(a.id):

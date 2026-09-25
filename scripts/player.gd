@@ -79,6 +79,8 @@ var controlled := true
 ## Multiplayer: host dirige o P2 com inputs da rede (ignora o teclado local).
 var use_ext := false
 var ext_dir := Vector2.ZERO
+## Mobile: direção do joystick (main preenche todo tick).
+var touch_move := Vector2.ZERO
 ## Teclas da run (foto do GameSettings feita no setup; no menu não muda).
 var bind: Dictionary = {}
 
@@ -270,6 +272,8 @@ func _physics_process(delta: float) -> void:
 		if _held("move_down"): dir.y += 1
 		if _held("move_left"): dir.x -= 1
 		if _held("move_right"): dir.x += 1
+		if touch_move != Vector2.ZERO:
+			dir = touch_move.normalized()
 
 	var pushing := dir != Vector2.ZERO
 	if pushing:
