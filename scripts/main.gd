@@ -37,6 +37,7 @@ var esnap_t := 0.0
 var wsnap_t := 0.0
 var input_t := 0.0
 var msg_seq := 0
+var msg_last := ""
 var msg_seen := 0
 var mp_prev := {}
 var net_id_counter := 0
