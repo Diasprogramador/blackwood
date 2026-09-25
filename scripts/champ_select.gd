@@ -127,13 +127,20 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 
 	var nav := HBoxContainer.new()
 	nav.alignment = BoxContainer.ALIGNMENT_CENTER
-	nav.add_theme_constant_override("separation", 16)
+	nav.add_theme_constant_override("separation", 10)
 	nav.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(nav)
 
+	var prev := Button.new()
+	prev.text = "◀"
+	prev.custom_minimum_size = Vector2(56, 50)
+	MenuArt.apply_menu_btn(prev, MenuArt.GOLD)
+	prev.pressed.connect(func(): _step(-1))
+	nav.add_child(prev)
+
 	var back := Button.new()
 	back.text = "← Voltar"
-	back.custom_minimum_size = Vector2(200, 50)
+	back.custom_minimum_size = Vector2(170, 50)
 	MenuArt.apply_menu_btn(back, MenuArt.GOLD)
 	back.pressed.connect(func():
 		Sfx.play(self, "click")
@@ -143,14 +150,21 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 
 	var go := Button.new()
 	go.text = "Avançar →"
-	go.custom_minimum_size = Vector2(200, 50)
+	go.custom_minimum_size = Vector2(170, 50)
 	MenuArt.apply_menu_btn(go, Color(0.4, 0.9, 0.45))
 	go.pressed.connect(func(): _confirm())
 	nav.add_child(go)
 
+	var next := Button.new()
+	next.text = "▶"
+	next.custom_minimum_size = Vector2(56, 50)
+	MenuArt.apply_menu_btn(next, MenuArt.GOLD)
+	next.pressed.connect(func(): _step(1))
+	nav.add_child(next)
+
 	var shop := Button.new()
 	shop.text = "LOJA ◆"
-	shop.custom_minimum_size = Vector2(160, 50)
+	shop.custom_minimum_size = Vector2(150, 50)
 	MenuArt.apply_menu_btn(shop, Color(0.55, 0.85, 1))
 	shop.pressed.connect(func():
 		Sfx.play(self, "click")
@@ -158,6 +172,13 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	)
 	nav.add_child(shop)
 
+	_refresh()
+
+## Passo de seleção (setas touch + teclado).
+func _step(d: int) -> void:
+	var n: int = ChampData.CHAMPS.size()
+	selected_index = (selected_index + d + n) % n
+	Sfx.play(self, "click")
 	_refresh()
 
 func _make_card(c: Dictionary, i: int) -> PanelContainer:
@@ -217,7 +238,10 @@ func _make_card(c: Dictionary, i: int) -> PanelContainer:
 
 	var idx := i
 	card.gui_input.connect(func(event):
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var tap_mouse: bool = event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT
+		var tap_touch: bool = event is InputEventScreenTouch and event.pressed
+		if tap_mouse or tap_touch:
 			if selected_index == idx:
 				_confirm()
 			else:
@@ -272,11 +296,10 @@ func _draw() -> void:
 	MenuArt.draw_screen_frame(self, size)
 
 func handle_key(key: int) -> bool:
-	var n: int = ChampData.CHAMPS.size()
 	if key == KEY_LEFT or key == KEY_A:
-		selected_index = (selected_index + n - 1) % n
+		_step(-1)
 	elif key == KEY_RIGHT or key == KEY_D:
-		selected_index = (selected_index + n + 1) % n
+		_step(1)
 	elif key >= KEY_1 and key <= KEY_5:
 		selected_index = key - KEY_1
 	elif key == KEY_ENTER or key == KEY_KP_ENTER:

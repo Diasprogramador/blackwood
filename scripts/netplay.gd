@@ -14,7 +14,7 @@ signal server_ready
 signal connect_failed
 
 const PORT := 4242
-const MAX_PLAYERS := 2
+const MAX_PLAYERS := 4
 
 var mode := 0  # 0 = solo, 1 = host, 2 = client
 var peer: ENetMultiplayerPeer = null
@@ -51,11 +51,11 @@ func has_ally() -> bool:
 # ----------------------------------------------------------------------
 #  HOST / JOIN / SAIR
 # ----------------------------------------------------------------------
-func host(port := PORT) -> String:
+func host(port := PORT, max_players := 2) -> String:
 	leave()
 	local_ip = _pick_local_ip()
 	var p := ENetMultiplayerPeer.new()
-	var err := p.create_server(port, MAX_PLAYERS - 1)
+	var err := p.create_server(port, clampi(max_players - 1, 1, MAX_PLAYERS - 1))
 	if err != OK:
 		return "Falha ao hospedar (porta %d ocupada?)" % port
 	peer = p
@@ -111,35 +111,38 @@ func _try_upnp(port: int) -> String:
 # ----------------------------------------------------------------------
 #  RPC: cliente -> host
 # ----------------------------------------------------------------------
+func _sender() -> int:
+	return get_tree().get_multiplayer().get_remote_sender_id()
+
 @rpc("any_peer", "reliable")
 func hello(champ_idx: int) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_on_hello"):
-		main.mp_on_hello(int(champ_idx))
+		main.mp_on_hello(_sender(), int(champ_idx))
 
 @rpc("any_peer", "reliable")
 func ready() -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_on_ready"):
-		main.mp_on_ready()
+		main.mp_on_ready(_sender())
 
 @rpc("any_peer", "unreliable")
 func push_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_on_input"):
-		main.mp_on_input(move, atk, sk, channel, item)
+		main.mp_on_input(_sender(), move, atk, sk, channel, item)
 
 @rpc("any_peer", "reliable")
 func req_upgrade(idx: int) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_on_buy_upgrade"):
-		main.mp_on_buy_upgrade(int(idx))
+		main.mp_on_buy_upgrade(_sender(), int(idx))
 
 @rpc("any_peer", "reliable")
 func req_item(idx: int) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_on_buy_item"):
-		main.mp_on_buy_item(int(idx))
+		main.mp_on_buy_item(_sender(), int(idx))
 
 # ----------------------------------------------------------------------
 #  RPC: host -> cliente
@@ -151,10 +154,10 @@ func begin(seed_value: int, stage: int, diff: int, host_champ: int) -> void:
 		main.mp_on_begin(int(seed_value), int(stage), int(diff), int(host_champ))
 
 @rpc("authority", "unreliable")
-func snap_players(a: Array, b: Array) -> void:
+func snap_players(list: Array) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_apply_players"):
-		main.mp_apply_players(a, b)
+		main.mp_apply_players(list)
 
 @rpc("authority", "unreliable")
 func snap_enemies(list: Array) -> void:

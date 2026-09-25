@@ -88,19 +88,23 @@ func _draw_top_left(p: Player) -> void:
 	draw_string(font, Vector2(x + 148, y + 80), "%d" % bank,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.85, 1))
 
-	# Aliado co-op (P2 compacto).
-	if main.get("player2") != null:
-		var q: Player = main.get("player2")
-		if q != null and is_instance_valid(q):
-			var ay := y + 96.0
+	# Aliados co-op (P2..P4 compactos).
+	if main.get("allies") != null:
+		var idx := 0
+		for q in (main.get("allies") as Array):
+			idx += 1
+			if q == null or not is_instance_valid(q):
+				continue
+			var qp: Player = q
+			var ay := y + 96.0 + float(idx - 1) * 42.0
 			ArtUtil.fill_rrect(self, x - 6, ay - 6, bw + 12, 40, 8, Color(0, 0, 0, 0.66))
 			ArtUtil.stroke_rrect(self, x - 6, ay - 6, bw + 12, 40, 8, Color(0.4, 0.9, 1, 0.5), 1)
-			draw_string(font, Vector2(x, ay + 10), "P2 %s  •  Lv.%d" % [q.champ_name, q.level],
+			draw_string(font, Vector2(x, ay + 10), "P%d %s  •  Lv.%d" % [idx + 1, qp.champ_name, qp.level],
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.9, 1))
-			var hr := clampf(q.hp / float(maxi(1, q.max_hp)), 0.0, 1.0)
+			var hr := clampf(qp.hp / float(maxi(1, qp.max_hp)), 0.0, 1.0)
 			draw_rect(Rect2(x, ay + 16, bw, 7), Color(0, 0, 0, 0.85))
 			draw_rect(Rect2(x, ay + 16, bw * hr, 7), Color(0.2, 0.8, 0.3))
-			var mr := clampf(float(q.mana) / float(maxi(1, q.max_mana)), 0.0, 1.0)
+			var mr := clampf(float(qp.mana) / float(maxi(1, qp.max_mana)), 0.0, 1.0)
 			draw_rect(Rect2(x, ay + 25, bw, 5), Color(0, 0, 0, 0.85))
 			draw_rect(Rect2(x, ay + 25, bw * mr, 5), Color(0.27, 0.51, 1))
 
@@ -251,10 +255,11 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 			draw_circle(pos, 2.5, Color(1, 0.25, 0.2))
 
 	draw_circle(Vector2(mx + p.position.x * sx, my + p.position.y * sy), 3.5, Color.WHITE)
-	if main.get("player2") != null:
-		var q2: Player = main.get("player2")
-		if q2 != null and is_instance_valid(q2) and q2.is_alive():
-			draw_circle(Vector2(mx + q2.position.x * sx, my + q2.position.y * sy), 3.5, Color(0.4, 0.9, 1))
+	if main.get("allies") != null:
+		for q2 in (main.get("allies") as Array):
+			if q2 != null and is_instance_valid(q2) and (q2 as Player).is_alive():
+				var qp: Player = q2
+				draw_circle(Vector2(mx + qp.position.x * sx, my + qp.position.y * sy), 3.5, Color(0.4, 0.9, 1))
 	ArtUtil.stroke_rrect(self, mx - 4, my - 4, mm + 8, mm + 8, 8, Color(0.5, 0.5, 0.5), 1)
 
 # ---------------------------------------------------------------------

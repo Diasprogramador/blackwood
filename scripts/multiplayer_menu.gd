@@ -8,6 +8,7 @@ signal host_pressed
 signal join_pressed(ip: String, port: int)
 signal back_pressed
 signal cancel_pressed
+signal count_pressed(n: int)
 
 var _status: Label = null
 var _ip_edit: LineEdit = null
@@ -41,12 +42,29 @@ func build_choice() -> void:
 	v.add_child(_centered(j))
 	v.add_child(_back_btn())
 
-func build_host(local_ip: String, port: int, net_info: String) -> void:
+func build_host(local_ip: String, port: int, net_info: String, max_n: int = 2) -> void:
 	_clear()
 	var v := _frame("🏠  HOSPEDAR")
 	v.add_child(_label("Seu IP local: %s   •   porta %d" % [local_ip, port], 15, Color(0.55, 0.85, 1)))
 	v.add_child(_label(net_info, 12, Color(1, 1, 1, 0.6)))
 	v.add_child(_label("Pela internet sem configurar roteador:\nuse Radmin VPN ou ZeroTier e passe o IP de lá.", 12, Color(1, 0.85, 0.4)))
+	v.add_child(_label("Jogadores na sala (máx. 4):", 14, MenuArt.CREAM))
+	var crow := HBoxContainer.new()
+	crow.alignment = BoxContainer.ALIGNMENT_CENTER
+	crow.add_theme_constant_override("separation", 10)
+	crow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(crow)
+	for n in [2, 3, 4]:
+		var cb := Button.new()
+		cb.text = "%dP" % n
+		cb.custom_minimum_size = Vector2(90, 40)
+		MenuArt.apply_menu_btn(cb, Color(0.4, 0.9, 0.45) if n == max_n else MenuArt.GOLD)
+		var nn: int = n
+		cb.pressed.connect(func():
+			Sfx.play(self, "click")
+			count_pressed.emit(nn)
+		)
+		crow.add_child(cb)
 	_status = _label("Escolha seu campeão em Jogar…", 14, MenuArt.CREAM)
 	v.add_child(_status)
 	var go := Button.new()

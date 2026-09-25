@@ -23,15 +23,18 @@ var shots: Array = []  # projéteis inimigos (ticados só em PLAY)
 var netplay: Netplay = null
 var mult_ui: MultiMenu = null
 var mp := 0
-var player2: Player = null
+var allies: Array = []  # Players P2..P4 (host simula, client renderiza)
+var ally_peers: Array = []  # peer id de cada aliado (mesma ordem)
+var ally_ready: Array = []  # pronto de cada aliado (mesma ordem)
+var ally_keys: Array = []  # client: chave de cada aliado (mesma ordem)
+var _ally_picks := {}  # slot -> champ idx escolhido
+var mp_max := 2  # jogadores na sala (2 a 4, escolhido no lobby)
 var mp_armed := false  # host vai jogar em dupla
 var client_pick := false  # client escolhendo campeão
 var mp_own_champ := 2
-var mp_ally_champ := 2
-var mp_ally_ready := false
 var mp_seed := -1
 var mp_foes := {}  # client: net_id -> Enemy
-var net_in := { move = Vector2.ZERO, atk = false, sk = [false, false, false, false, false], channel = false, item = false }
+var net_ins := {}  # host: peer id -> inputs do aliado
 var snap_t := 0.0
 var esnap_t := 0.0
 var wsnap_t := 0.0
@@ -41,7 +44,6 @@ var msg_last := ""
 var msg_seen := 0
 var mp_prev := {}
 var net_id_counter := 0
-var mp_client_id := -1
 var touch_ui: TouchControls = null
 var walk_cache: Array = []  # tiles livres (cache por run: evita scan 60x60 por spawn)
 var kill_count := 0
@@ -190,6 +192,7 @@ func _ready() -> void:
 	mult_ui.join_pressed.connect(_mp_join_go)
 	mult_ui.back_pressed.connect(_mp_lobby_back)
 	mult_ui.cancel_pressed.connect(_mp_lobby_cancel)
+	mult_ui.count_pressed.connect(_mp_count)
 	mult_ui.set_anchors_preset(Control.PRESET_FULL_RECT, false)
 	ui_root.add_child(mult_ui)
 
@@ -215,6 +218,9 @@ func _overlay_btn(txt: String, accent := Color(1.0, 0.85, 0.4)) -> Button:
 	b.custom_minimum_size = Vector2(220, 44)
 	MenuArt.apply_menu_btn(b, accent)
 	return b
+
+func _quality_name() -> String:
+	return ["Alta", "Média", "Baixa"][clampi(int(settings.get("quality", 1)), 0, 2)]
 
 func _build_pause_ui(parent: Node) -> void:
 	pause_layer = Control.new()
@@ -259,6 +265,15 @@ func _build_pause_ui(parent: Node) -> void:
 	var menu := _overlay_btn("🏠 Menu principal")
 	menu.pressed.connect(func(): _enter_menu())
 	v.add_child(menu)
+
+	var gfx := _overlay_btn("🎨 Gráficos: " + _quality_name())
+	gfx.pressed.connect(func():
+		settings["quality"] = (int(settings.get("quality", 1)) + 1) % 3
+		GameSettings.save_data(settings)
+		Sfx.play(self, "click")
+		gfx.text = "🎨 Gráficos: " + _quality_name()
+	)
+	v.add_child(gfx)
 
 func _build_gameover_ui(parent: Node) -> void:
 	gameover_layer = Control.new()
@@ -426,13 +441,15 @@ func _hide_all() -> void:
 func _enter_menu() -> void:
 	state = State.MENU
 	if mp == 1:
-		netplay.to_menu.rpc()
+		if netplay.peer != null:
+			netplay.to_menu.rpc()
 		netplay.leave()
 	if mp == 2:
 		netplay.leave()
 	mp = 0
 	mp_armed = false
 	client_pick = false
+	_reset_mp_session()
 	_clear_world()
 	settings = GameSettings.load_data()
 	progress = StageData.load_progress()
@@ -484,17 +501,26 @@ func _enter_multi() -> void:
 	mp = 0
 	mp_armed = false
 	client_pick = false
+	mp_max = 2
+	_reset_mp_session()
 	netplay.leave()
 	_hide_all()
 	mult_ui.visible = true
 	mult_ui.build_choice()
+
+## Zera a sessão do lobby (peers, prontos, inputs). Run não mexe aqui.
+func _reset_mp_session() -> void:
+	ally_peers.clear()
+	ally_ready.clear()
+	_ally_picks.clear()
+	net_ins.clear()
 
 func _mp_host_go() -> void:
 	if mp == 1:
 		mp_armed = true
 		_enter_champ()
 		return
-	var err := netplay.host(Netplay.PORT)
+	var err := netplay.host(Netplay.PORT, mp_max)
 	if err != "":
 		Sfx.play(self, "error")
 		_hide_all()
@@ -503,10 +529,23 @@ func _mp_host_go() -> void:
 		return
 	mp = 1
 	mp_armed = false
-	mp_ally_ready = false
 	_hide_all()
 	mult_ui.visible = true
-	mult_ui.build_host(netplay.local_ip, Netplay.PORT, netplay.upnp_info)
+	mult_ui.build_host(netplay.local_ip, Netplay.PORT, netplay.upnp_info, mp_max)
+
+func _mp_count(n: int) -> void:
+	if netplay.has_ally():
+		Sfx.play(self, "error")
+		mult_ui.set_status("Amigos já conectados — não dá pra mudar agora.")
+		return
+	mp_max = clampi(n, 2, 4)
+	var err := netplay.host(Netplay.PORT, mp_max)
+	if err != "":
+		Sfx.play(self, "error")
+		return
+	_hide_all()
+	mult_ui.visible = true
+	mult_ui.build_host(netplay.local_ip, Netplay.PORT, netplay.upnp_info, mp_max)
 
 func _mp_join_go(ip: String, port: int) -> void:
 	var err := netplay.join(ip, port)
@@ -539,23 +578,28 @@ func _mp_connect_failed() -> void:
 
 func _mp_peer_joined(_id: int) -> void:
 	if mp == 1:
-		mp_client_id = _id
 		if state == State.MULTI:
 			mult_ui.set_status("Amigo conectado! Escolha seu campeão →")
 	elif state == State.PLAY:
 		say("Amigo entrou na arena!")
 
-func _mp_peer_left(_id: int) -> void:
-	if mp == 1 and _id != mp_client_id:
-		return  # sinal espúrio com id desconhecido: ignora
-	mp_client_id = -1
+func _mp_peer_left(pid: int) -> void:
 	if mp == 1:
-		mp_ally_ready = false
-		if state == State.PLAY and player2 != null:
-			if is_instance_valid(player2):
-				player2.queue_free()
-			player2 = null
-			say("Amigo desconectou — run solo agora.")
+		var i := _ally_index(pid)
+		if i < 0:
+			return  # sinal espúrio com id desconhecido: ignora
+		var gone = allies[i]
+		if is_instance_valid(gone):
+			gone.queue_free()
+		allies.remove_at(i)
+		ally_peers.remove_at(i)
+		ally_ready.remove_at(i)
+		if state == State.PLAY:
+			var me_up := player != null and is_instance_valid(player) and player.is_alive()
+			if not me_up and _living_allies().is_empty():
+				_on_player_died()
+			else:
+				say("Amigo desconectou — seguimos sem ele.")
 		elif state == State.MULTI:
 			mult_ui.set_status("Amigo saiu.")
 		elif state == State.STAGE:
@@ -576,42 +620,79 @@ func _on_champ_chosen(champ_idx: int) -> void:
 		return
 	_enter_stage()
 
-func mp_on_hello(champ_idx: int) -> void:
-	mp_ally_champ = clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)
+func mp_on_hello(pid: int, champ_idx: int) -> void:
+	if mp != 1:
+		return
+	var champ := clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)
+	var i := _ally_index(pid)
+	if i < 0:
+		if ally_peers.size() >= mp_max - 1:
+			return  # sala cheia
+		ally_peers.append(pid)
+		ally_ready.append(false)
+		_ally_picks[ally_peers.size() - 1] = champ
+		net_ins[pid] = { move = Vector2.ZERO, atk = false,
+			sk = [false, false, false, false, false], channel = false, item = false }
+	else:
+		_ally_picks[i] = champ
 
-func mp_on_ready() -> void:
-	mp_ally_ready = true
+func mp_on_ready(pid: int) -> void:
+	if mp != 1:
+		return
+	var i := _ally_index(pid)
+	if i < 0:
+		return
+	ally_ready[i] = true
 	if state == State.STAGE:
 		stage_ui._refresh()
 		_stage_ally_line()
 
+func _ready_count() -> int:
+	var n := 0
+	for r in ally_ready:
+		if bool(r):
+			n += 1
+	return n
+
 func _stage_ally_line() -> void:
 	if mp == 1 and mp_armed and stage_ui._info_label != null:
-		if mp_ally_ready:
-			stage_ui._info_label.text += "   •   P2: %s PRONTO" % str(ChampData.CHAMPS[mp_ally_champ].get("nome", "?"))
+		var parts := []
+		for i in ally_peers.size():
+			var nm := "?"
+			if _ally_picks.has(i):
+				nm = str(ChampData.CHAMPS[int(_ally_picks[i])].get("nome", "?"))
+			parts.append("P%d: %s %s" % [i + 2, nm, "PRONTO" if i < ally_ready.size() and bool(ally_ready[i]) else "…"])
+		if parts.is_empty():
+			stage_ui._info_label.text += "   •   aguardando amigos…"
 		else:
-			stage_ui._info_label.text += "   •   aguardando P2…"
+			stage_ui._info_label.text += "   •   " + "  ".join(parts)
 
 func _on_stage_start(stage_idx: int, diff_idx: int) -> void:
 	if mp == 1 and mp_armed:
-		if not netplay.has_ally() or not mp_ally_ready:
+		if _ready_count() < 1 or not netplay.has_ally():
 			Sfx.play(self, "error")
 			stage_ui._refresh()
-			stage_ui._info_label.text = "Aguardando amigo conectar e ficar pronto…"
+			if stage_ui._info_label != null:
+				stage_ui._info_label.text = "Aguardando amigos conectar e ficar pronto…"
 			return
 		mp_seed = randi()
-		start_game(_selected, stage_idx, diff_idx, mp_seed, mp_ally_champ)
+		var picks := []
+		for i in ally_peers.size():
+			picks.append(int(_ally_picks.get(i, 2)))
+		start_game(_selected, stage_idx, diff_idx, mp_seed, picks)
 		netplay.begin.rpc(mp_seed, cur_stage, cur_diff, _selected)
 		return
 	start_game(_selected, stage_idx, diff_idx)
 
-func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, seed_value: int = -1, ally_idx: int = -1) -> void:
-	# Client reiniciando vira solo; host reiniciando reabre a dupla.
+func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, seed_value: int = -1, ally_list: Array = []) -> void:
+	# Client reiniciando vira solo; host reiniciando reabre a sala.
 	if mp == 2:
 		netplay.leave()
 		mp = 0
-	if mp == 1 and mp_armed and ally_idx < 0 and netplay.has_ally() and mp_ally_ready:
-		ally_idx = mp_ally_champ
+	if mp == 1 and mp_armed and ally_list.is_empty() and _ready_count() >= 1:
+		ally_list = []
+		for i in ally_peers.size():
+			ally_list.append(int(_ally_picks.get(i, 2)))
 		seed_value = randi()
 		mp_seed = seed_value
 		netplay.begin.rpc(mp_seed, cur_stage, cur_diff, _selected)
@@ -656,31 +737,8 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	entities.add_child(player)
 	camera.position = player.position
 
-	if ally_idx >= 0:
-		var c2: Dictionary = ChampData.CHAMPS[clampi(ally_idx, 0, ChampData.CHAMPS.size() - 1)]
-		player2 = PlayerScript.new()
-		player2.name = "Player2"
-		player2.world = world
-		var cfgs2: Array = []
-		var unl2: Array = StageData.unlocked_skills(progress, str(c2.role))
-		var rskills2: Array = ChampData.ROLES[str(c2.role)].skills
-		for i in mini(rskills2.size(), unl2.size()):
-			if bool(unl2[i]):
-				cfgs2.append(rskills2[i])
-		player2.setup(str(c2.get("nome", "?")), str(c2.get("role", "tank")), cfgs2)
-		player2.position = world.center_px() + Vector2(40, 0)
-		player2.died.connect(_on_player_died)
-		player2.leveled_up.connect(func(msg):
-			if msg != "":
-				say(msg)
-		)
-		if mp == 1:
-			# Host simula o aliado com os inputs que chegam pela rede.
-			player2.controlled = true
-			player2.use_ext = true
-		else:
-			player2.controlled = false
-		entities.add_child(player2)
+	for a in ally_list.size():
+		_spawn_ally(int(ally_list[a]), a)
 
 	kill_count = 0
 	game_time = 0.0
@@ -691,6 +749,10 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	_hide_all()
 	hud.visible = true
 	state = State.PLAY
+
+	# Sem entrada no meio da run (sala fechada).
+	if mp == 1 and netplay.peer != null:
+		netplay.peer.refuse_new_connections = true
 
 	# Client não roda waves (recebe tudo do host).
 	if mp != 2:
@@ -706,17 +768,46 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 		say("%s = soco | 1-%d = skills | %s = loja" % [atk_key, nskills, shop_key])
 	say("Mana é curta: cada skill conta! Sobreviva às 5 ondas!")
 
+## Spawna um aliado P2..P4 (host simula, client só renderiza).
+func _spawn_ally(champ_idx: int, slot: int) -> void:
+	var c2: Dictionary = ChampData.CHAMPS[clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)]
+	var p2 := PlayerScript.new()
+	p2.name = "Player%d" % (slot + 2)
+	p2.world = world
+	var cfgs2: Array = []
+	var unl2: Array = StageData.unlocked_skills(progress, str(c2.role))
+	var rskills2: Array = ChampData.ROLES[str(c2.role)].skills
+	for i in mini(rskills2.size(), unl2.size()):
+		if bool(unl2[i]):
+			cfgs2.append(rskills2[i])
+	p2.setup(str(c2.get("nome", "?")), str(c2.get("role", "tank")), cfgs2)
+	p2.position = world.center_px() + Vector2(40, 0) + Vector2(0, slot * 36)
+	p2.died.connect(_on_player_died)
+	p2.leveled_up.connect(func(msg):
+		if msg != "":
+			say(msg)
+	)
+	if mp == 1:
+		# Host simula o aliado com os inputs que chegam pela rede.
+		p2.controlled = true
+		p2.use_ext = true
+	else:
+		p2.controlled = false
+	entities.add_child(p2)
+	allies.append(p2)
+
 func _start_wave(idx: int) -> void:
 	wave_idx = idx
 	wave_quota = StageData.wave_quota(cur_stage, idx, cur_diff)
-	if player2 != null and is_instance_valid(player2):
-		wave_quota = int(wave_quota * 1.5)  # dupla encara mais bicho
+	var extra := _all_players().size() - 1
+	if extra > 0:
+		wave_quota = int(wave_quota * (1.0 + 0.5 * float(extra)))
 	# Co-op: caídos revivem a cada onda com metade da vida.
-	for pl in [player, player2]:
-		if pl != null and is_instance_valid(pl) and not pl.is_alive():
-			pl.hp = maxi(1, int(pl.max_hp * 0.5))
-			pl.mana = pl.max_mana
-			say("%s reviveu! (50%%)" % pl.champ_name)
+	for pl in _all_players():
+		if not (pl as Player).is_alive():
+			(pl as Player).hp = maxi(1, int((pl as Player).max_hp * 0.5))
+			(pl as Player).mana = (pl as Player).max_mana
+			say("%s reviveu! (50%%)" % (pl as Player).champ_name)
 	wave_spawned = 0
 	wave_killed = 0
 	wave_active = true
@@ -761,8 +852,8 @@ func _diff_mults() -> Dictionary:
 		"df": float(dd.get("df", 1.0)), "gold": float(dd.get("gold", 1.0)),
 		"exp": float(dd.get("exp", 1.0)), "speed": float(dd.get("speed", 1.0)),
 	}
-	if player2 != null and is_instance_valid(player2):
-		m["hp"] = float(m["hp"]) * 1.2  # dupla: bicho mais tankudo
+	if _all_players().size() > 1:
+		m["hp"] = float(m["hp"]) * (1.0 + 0.2 * float(_all_players().size() - 1))
 	return m
 
 func _clear_world() -> void:
@@ -781,10 +872,13 @@ func _clear_world() -> void:
 	if player != null and is_instance_valid(player):
 		player.queue_free()
 		player = null
-	if player2 != null and is_instance_valid(player2):
-		player2.queue_free()
-		player2 = null
+	for pl in allies:
+		if is_instance_valid(pl):
+			(pl as Node).queue_free()
+	allies.clear()
+	ally_keys.clear()
 	mp_foes.clear()
+	walk_cache.clear()
 	wave_active = false
 	between_timer = 0.0
 	boss_left = 0
@@ -797,11 +891,11 @@ func _on_player_died() -> void:
 		return  # host decide; chega via force_state
 	if mp == 1:
 		var p1_up := player != null and is_instance_valid(player) and player.is_alive()
-		var p2_up := player2 != null and is_instance_valid(player2) and player2.is_alive()
-		if p1_up or p2_up:
+		if p1_up or not _living_allies().is_empty():
 			say("Um campeão caiu! Revive na próxima onda.")
 			return
-		netplay.force_state.rpc(0)
+		if _relay():
+			netplay.force_state.rpc(0)
 	state = State.GAMEOVER
 	var gw := StageData.global_wave(cur_stage, wave_idx)
 	var kills_lbl: Label = _find_label(gameover_layer, "Kills")
@@ -837,7 +931,7 @@ func _on_victory() -> void:
 	victory_layer.visible = true
 	add_shake(8.0)
 	Sfx.play(self, "victory")
-	if mp == 1:
+	if _relay():
 		netplay.force_state.rpc(1)
 
 func _find_label(root: Node, name: String) -> Label:
@@ -972,75 +1066,114 @@ func _physics_process(delta: float) -> void:
 	# regenera HUD suavemente
 	hud.queue_redraw()
 
-	if mp == 1:
+	if mp == 1 and netplay.has_ally():
 		_host_net_tick(delta)
 
 ## Vivo mais próximo (co-op) ou o jogador.
 func _nearest_alive(pos: Vector2) -> Player:
-	var best = null
+	var best: Player = null
 	var best_d := INF
-	for pl in [player, player2]:
-		if pl == null or not is_instance_valid(pl):
+	for pl in _all_players():
+		if not (pl as Player).is_alive():
 			continue
-		if not pl.is_alive():
-			continue
-		var dd := pos.distance_to(pl.position)
+		var dd := pos.distance_to((pl as Player).position)
 		if dd < best_d:
 			best_d = dd
 			best = pl
 	return best
 
+func _all_players() -> Array:
+	var out := []
+	if player != null and is_instance_valid(player):
+		out.append(player)
+	for pl in allies:
+		if pl != null and is_instance_valid(pl):
+			out.append(pl)
+	return out
+
+func _living_allies() -> Array:
+	var out := []
+	for pl in allies:
+		if pl != null and is_instance_valid(pl) and (pl as Player).is_alive():
+			out.append(pl)
+	return out
+
+func _ally_index(pid: int) -> int:
+	return ally_peers.find(pid)
+
+func _ally_of(pid: int):
+	var i := _ally_index(pid)
+	if i < 0 or i >= allies.size():
+		return null
+	var pl = allies[i]
+	if pl == null or not is_instance_valid(pl):
+		return null
+	return pl
+
+func _coop_size() -> int:
+	return _all_players().size()
+
 func _camera_focus() -> Vector2:
-	var a := player != null and is_instance_valid(player) and player.is_alive()
-	var b := player2 != null and is_instance_valid(player2) and player2.is_alive()
-	if a and b:
-		return (player.position + player2.position) * 0.5
-	if b:
-		return player2.position
-	if a:
-		return player.position
-	return camera.position
+	var pts := []
+	if player != null and is_instance_valid(player) and player.is_alive():
+		pts.append(player.position)
+	for pl in allies:
+		if pl != null and is_instance_valid(pl) and (pl as Player).is_alive():
+			pts.append((pl as Player).position)
+	if pts.is_empty():
+		return camera.position
+	var mid := Vector2.ZERO
+	for p in pts:
+		mid += p
+	return mid / float(pts.size())
 
 # =====================================================================
 #  MULTIPLAYER EM JOGO (host simula, client renderiza)
 # =====================================================================
 func _apply_ally_input() -> void:
-	if player2 == null or not is_instance_valid(player2) or not player2.is_alive():
-		return
-	var mv: Vector2 = net_in.get("move", Vector2.ZERO)
-	player2.ext_dir = mv.limit_length(1.0) if mv.length() > 1.0 else mv
-	if bool(net_in.get("atk", false)):
-		_do_basic_attack(player2)
-	var sk: Array = net_in.get("sk", [])
-	for i in mini(5, sk.size()):
-		if bool(sk[i]):
-			_do_cast(i, player2)
-	if bool(net_in.get("channel", false)):
-		_toggle_channel(player2)
-	if bool(net_in.get("item", false)):
-		_use_first_item(player2)
-	net_in.atk = false
-	net_in.sk = [false, false, false, false, false]
-	net_in.channel = false
-	net_in.item = false
+	for pid in net_ins.keys():
+		var pl = _ally_of(int(pid))
+		if pl == null or not (pl as Player).is_alive():
+			continue
+		var inp: Dictionary = net_ins[pid]
+		var mv: Vector2 = inp.get("move", Vector2.ZERO)
+		(pl as Player).ext_dir = mv.limit_length(1.0) if mv.length() > 1.0 else mv
+		if bool(inp.get("atk", false)):
+			_do_basic_attack(pl)
+		var sk: Array = inp.get("sk", [])
+		for i in mini(5, sk.size()):
+			if bool(sk[i]):
+				_do_cast(i, pl)
+		if bool(inp.get("channel", false)):
+			_toggle_channel(pl)
+		if bool(inp.get("item", false)):
+			_use_first_item(pl)
+		inp.atk = false
+		inp.sk = [false, false, false, false, false]
+		inp.channel = false
+		inp.item = false
 
-func mp_on_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
-	net_in.move = move
+func mp_on_input(pid: int, move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
+	if not net_ins.has(pid):
+		net_ins[pid] = { move = Vector2.ZERO, atk = false,
+			sk = [false, false, false, false, false], channel = false, item = false }
+	var inp: Dictionary = net_ins[pid]
+	inp.move = move
 	if atk:
-		net_in.atk = true
-	var cur: Array = net_in.sk
+		inp.atk = true
+	var cur: Array = inp.sk
 	for i in mini(5, (sk as Array).size()):
 		if bool(sk[i]):
 			cur[i] = true
 	if channel:
-		net_in.channel = true
+		inp.channel = true
 	if item:
-		net_in.item = true
+		inp.item = true
 
-func _pack_player(pl) -> Array:
+func _pack_player(pl, key: int = 0) -> Array:
 	if pl == null or not is_instance_valid(pl):
 		return []
-	return [pl.position, pl.hp, pl.max_hp, float(pl.mana), pl.max_mana, pl.level,
+	return [key, pl.position, pl.hp, pl.max_hp, float(pl.mana), pl.max_mana, pl.level,
 		pl.xp, pl.gold, pl.facing, pl.moving, pl.walk_phase, pl.channeling,
 		pl.is_alive(), pl.attack_cd, pl.champ_name, pl.role]
 
@@ -1069,7 +1202,11 @@ func _host_net_tick(delta: float) -> void:
 	snap_t += delta
 	if snap_t >= 0.05:
 		snap_t = 0.0
-		netplay.snap_players.rpc(_pack_player(player), _pack_player(player2))
+		var plist := [_pack_player(player, 1)]
+		for i in allies.size():
+			var key := int(ally_peers[i]) if i < ally_peers.size() else -(i + 1)
+			plist.append(_pack_player(allies[i], key))
+		netplay.snap_players.rpc(plist)
 	esnap_t += delta
 	if esnap_t >= 0.08:
 		esnap_t = 0.0
@@ -1143,8 +1280,9 @@ func _update_touch() -> void:
 		touch_ui.player_ref = player
 	if player != null and is_instance_valid(player):
 		player.touch_move = td
-	if player2 != null and is_instance_valid(player2):
-		player2.touch_move = td
+	for pl in allies:
+		if pl != null and is_instance_valid(pl):
+			(pl as Player).touch_move = td
 
 func touch_button(id: String) -> void:
 	if state == State.SHOP:
@@ -1189,27 +1327,70 @@ func _edge(action_id: String) -> bool:
 	mp_prev[action_id] = now
 	return now and not was
 
-func mp_apply_players(a: Array, b: Array) -> void:
-	_apply_psnap(player, a)
-	_apply_psnap(player2, b)
+func mp_apply_players(list: Array) -> void:
+	# Cada entrada leva a chave do dono (1 = host). O próprio vai para
+	# player; o resto vira aliado por chave estável.
+	var me := get_tree().get_multiplayer().get_unique_id()
+	var self_arr := []
+	var want := []
+	for item in list:
+		if not (item is Array) or (item as Array).size() < 17:
+			continue
+		var arr: Array = item
+		if int(arr[0]) == me:
+			self_arr = arr
+		else:
+			want.append(arr)
+	if not self_arr.is_empty():
+		_apply_psnap(player, self_arr)
+	var new_allies := []
+	var new_keys := []
+	for w in want:
+		var key := int(w[0])
+		var found = null
+		for j in allies.size():
+			if j < ally_keys.size() and int(ally_keys[j]) == key \
+					and is_instance_valid(allies[j]):
+				found = allies[j]
+				break
+		if found == null:
+			found = _spawn_client_ally(w)
+		if found != null:
+			new_allies.append(found)
+			new_keys.append(key)
+			_apply_psnap(found, w)
+	for old in allies:
+		if not new_allies.has(old) and is_instance_valid(old):
+			old.queue_free()
+	allies = new_allies
+	ally_keys = new_keys
+
+func _spawn_client_ally(w: Array):
+	var obj = PlayerScript.new()
+	obj.world = world
+	obj.setup(str(w[15]), str(w[16]), [])
+	obj.controlled = false
+	obj.position = w[1]
+	entities.add_child(obj)
+	return obj
 
 func _apply_psnap(pl: Player, arr: Array) -> void:
-	if pl == null or not is_instance_valid(pl) or arr.size() < 16:
+	if pl == null or not is_instance_valid(pl) or arr.size() < 17:
 		return
 	var before: Vector2 = pl.position
-	pl.position = arr[0]
-	pl.hp = int(arr[1])
-	pl.max_hp = int(arr[2])
-	pl.mana = float(arr[3])
-	pl.max_mana = int(arr[4])
-	pl.level = int(arr[5])
-	pl.xp = int(arr[6])
-	pl.gold = int(arr[7])
-	pl.facing = int(arr[8])
-	pl.moving = bool(arr[9])
-	pl.walk_phase = float(arr[10])
-	pl.channeling = bool(arr[11])
-	pl.attack_cd = float(arr[13])
+	pl.position = arr[1]
+	pl.hp = int(arr[2])
+	pl.max_hp = int(arr[3])
+	pl.mana = float(arr[4])
+	pl.max_mana = int(arr[5])
+	pl.level = int(arr[6])
+	pl.xp = int(arr[7])
+	pl.gold = int(arr[8])
+	pl.facing = int(arr[9])
+	pl.moving = bool(arr[10])
+	pl.walk_phase = float(arr[11])
+	pl.channeling = bool(arr[12])
+	pl.attack_cd = float(arr[14])
 	pl.queue_redraw()
 	if before.distance_to(pl.position) > 2.0 and pl.is_alive():
 		pl.trail.append({ p = pl.position, life = Player.TRAIL_LIFE })
@@ -1329,7 +1510,7 @@ func mp_apply_float(txt: String, x: float, y: float, col: Color, size: int) -> v
 
 func mp_on_begin(seed_value: int, stage: int, diff: int, host_champ: int) -> void:
 	mp_seed = seed_value
-	start_game(mp_own_champ, stage, diff, seed_value, host_champ)
+	start_game(mp_own_champ, stage, diff, seed_value, [host_champ])
 
 func mp_on_force_state(s: int) -> void:
 	if s == 0:
@@ -1472,7 +1653,8 @@ func _set_pause(v: bool) -> void:
 	state = State.PAUSE if v else State.PLAY
 	if mp == 1:
 		say("⏸ Host pausou." if v else "▶ Host continuou!")
-		_host_net_tick(999.0)
+		if _relay():
+			_host_net_tick(999.0)
 
 func _toggle_channel(pl: Player = null) -> void:
 	if mp == 2 and pl == null:
@@ -1612,23 +1794,25 @@ func _clone_shop_item(template: Item) -> Item:
 		return Equipment.new(template.type, template.stat_type, template.bonus_value)
 	return null
 
-func mp_on_buy_upgrade(idx: int) -> void:
-	if player2 != null and is_instance_valid(player2):
-		try_buy_upgrade(idx, player2)
+func mp_on_buy_upgrade(pid: int, idx: int) -> void:
+	var pl = _ally_of(pid)
+	if pl != null:
+		try_buy_upgrade(idx, pl)
 
-func mp_on_buy_item(idx: int) -> void:
-	if player2 == null or not is_instance_valid(player2):
+func mp_on_buy_item(pid: int, idx: int) -> void:
+	var pl = _ally_of(pid)
+	if pl == null:
 		return
 	if shop._shop_items == null or idx < 0 or idx >= shop._shop_items.size():
 		return
 	var clone := _clone_shop_item(shop._shop_items[idx])
 	if clone == null:
 		return
-	if player2.buy_item(clone):
-		say("P2 comprou: %s" % clone.name)
+	if (pl as Player).buy_item(clone):
+		say("%s comprou: %s" % [(pl as Player).champ_name, clone.name])
 		Sfx.play(self, "buy")
 	else:
-		say("P2 sem gold!")
+		say("%s sem gold!" % (pl as Player).champ_name)
 		Sfx.play(self, "error")
 
 # =====================================================================
@@ -1639,8 +1823,9 @@ func _on_enemy_killed(e) -> void:
 	wave_killed += 1
 	if player:
 		player.gain_exp(e.exp_reward)
-	if player2 != null and is_instance_valid(player2):
-		player2.gain_exp(e.exp_reward)
+	for pl in allies:
+		if pl != null and is_instance_valid(pl):
+			(pl as Player).gain_exp(e.exp_reward)
 	_spawn_hit_burst(e.position)
 	# chefões balançam muito a tela
 	if e.is_boss():
@@ -1839,14 +2024,18 @@ func add_shake(amount: float) -> void:
 ## Mensagem no HUD (+ fila para o cliente no multiplayer).
 func say(text: String) -> void:
 	hud.add_message(text)
-	if mp == 1:
+	if _relay():
 		msg_seq += 1
 		msg_last = text
+
+## Pode replicar? (host com aliado conectado de verdade).
+func _relay() -> bool:
+	return mp == 1 and netplay.has_ally()
 
 func _float_text(msg: String, pos: Vector2, col: Color, size: int) -> void:
 	if msg == "":
 		return
-	if mp == 1:
+	if _relay():
 		netplay.float_txt.rpc(msg, pos.x, pos.y, col, size)
 	var ft = FloatingTextScript.new()
 	fx_layer.add_child(ft)
@@ -1870,18 +2059,18 @@ func _spawn_skill_vfx(role: String, kind: String, pos: Vector2, big: bool) -> vo
 
 ## Efeito de ataque do personagem (tipo vem do SkillIcon, escala por slot).
 func _spawn_role_fx(pos: Vector2, fx_type: int, scale_p: float = 1.0) -> void:
-	if mp == 1:
+	if _relay():
 		netplay.fx_spawn.rpc(fx_type, pos.x, pos.y, scale_p)
 	fx_layer.add_child(AttackEffect.new(
 		fx_type, pos.x, pos.y, randf_range(-0.3, 0.3), scale_p))
 
 func _spawn_heal(pos: Vector2) -> void:
-	if mp == 1:
+	if _relay():
 		netplay.fx_spawn.rpc(AttackEffect.Type.HEAL, pos.x, pos.y, 1.0)
 	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.HEAL, pos.x, pos.y))
 
 func _spawn_hit_burst(pos: Vector2) -> void:
-	if mp == 1:
+	if _relay():
 		netplay.fx_spawn.rpc(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y, 1.0)
 	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y))
 	var n := 8
@@ -1905,9 +2094,6 @@ func _spark_color() -> Color:
 
 ## Inimigo ranged atirou: cria o projétil (dragão-boss cospe 3).
 func _on_enemy_shoot(e) -> void:
-	if player == null or not is_instance_valid(player) or not player.is_alive():
-		if player2 == null or not is_instance_valid(player2) or not player2.is_alive():
-			return
 	if not is_instance_valid(e):
 		return
 	var tgt := _nearest_alive(e.position)
