@@ -634,8 +634,8 @@ func _physics_process(delta: float) -> void:
 				_on_victory()
 				return
 			between_timer = BETWEEN_DELAY
-			# Respiro entre ondas + pequena cura (TAB = loja).
-			player.heal(int(player.max_hp * 0.15))
+			# Respiro entre ondas + cura honesta (TAB = loja).
+			player.heal(int(player.max_hp * 0.20))
 			# Essência ◆ = moeda meta: só de ondas/fases, nunca de kills.
 			var bonus := StageData.essence_for_wave(cur_stage, wave_idx, cur_diff)
 			var total := StageData.add_essence(progress, bonus)
@@ -970,7 +970,7 @@ func _spawn_next() -> void:
 		return
 	var is_last := wave_idx == StageData.WAVES_PER_STAGE - 1
 	# Elites ficam mais comuns no fim da fase e nas dificuldades altas.
-	var elite_chance := 0.06 + wave_idx * 0.02 + cur_diff * 0.05
+	var elite_chance := 0.05 + wave_idx * 0.015 + cur_diff * 0.05
 	if is_last:
 		elite_chance += 0.08
 	_spawn_minion(randf() < elite_chance)
@@ -984,8 +984,8 @@ func _spawn_boss() -> void:
 	var m := _diff_mults()
 	# Chefão tankudo de verdade + escala extra com a dificuldade:
 	# no IMPOSSÍVEL ele vem com muito mais vida e mais rápido.
-	m["hp"] = float(m.get("hp", 1.0)) * 3.0 * (1.0 + cur_diff * 0.2)
-	m["atk"] = float(m.get("atk", 1.0)) * 1.6 * (1.0 + cur_diff * 0.1)
+	m["hp"] = float(m.get("hp", 1.0)) * 2.6 * (1.0 + cur_diff * 0.2)
+	m["atk"] = float(m.get("atk", 1.0)) * 1.4 * (1.0 + cur_diff * 0.1)
 	m["df"] = float(m.get("df", 1.0)) * 1.3
 	m["gold"] = float(m.get("gold", 1.0)) * 3.0
 	m["exp"] = float(m.get("exp", 1.0)) * 3.0
@@ -1015,8 +1015,8 @@ func _spawn_miniboss() -> void:
 		mini_left += 1
 		return
 	var m := _diff_mults()
-	m["hp"] = float(m.get("hp", 1.0)) * 2.4 * (1.0 + cur_diff * 0.15)
-	m["atk"] = float(m.get("atk", 1.0)) * 1.5 * (1.0 + cur_diff * 0.08)
+	m["hp"] = float(m.get("hp", 1.0)) * 2.0 * (1.0 + cur_diff * 0.15)
+	m["atk"] = float(m.get("atk", 1.0)) * 1.35 * (1.0 + cur_diff * 0.08)
 	m["df"] = float(m.get("df", 1.0)) * 1.2
 	m["gold"] = float(m.get("gold", 1.0)) * 2.5
 	m["exp"] = float(m.get("exp", 1.0)) * 2.5
@@ -1046,7 +1046,7 @@ func _spawn_minion(force_elite: bool = false) -> void:
 	var m := _diff_mults()
 	if force_elite:
 		m["hp"] = float(m.get("hp", 1.0)) * 1.8
-		m["atk"] = float(m.get("atk", 1.0)) * 1.4
+		m["atk"] = float(m.get("atk", 1.0)) * 1.25
 		m["gold"] = float(m.get("gold", 1.0)) * 2.0
 		m["exp"] = float(m.get("exp", 1.0)) * 1.5
 		m["elite"] = true

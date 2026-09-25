@@ -108,7 +108,7 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 	defense = rs.def
 	magic = rs.mag
 	attack_range = rs.range
-	gold = 80
+	gold = 100
 	crit_chance = 0.15
 	mana_regen = 1.0
 	bind = GameSettings.load_data().get("keys", {})
@@ -186,7 +186,7 @@ func _process(delta: float) -> void:
 			channeling = false
 			set_process_unhandled_input(true)
 	else:
-		var per_sec := 3.0 + mana_regen + level * 0.6
+		var per_sec := 3.5 + mana_regen + level * 0.6
 		mana = minf(max_mana, mana + per_sec * d)
 
 ## Pose + transform do sprite (tudo interpolado: nada teleporta).
