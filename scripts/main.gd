@@ -39,6 +39,8 @@ var snap_t := 0.0
 var esnap_t := 0.0
 var wsnap_t := 0.0
 var input_t := 0.0
+var wave_banner_txt := ""
+var wave_banner_t := 0.0
 var msg_seq := 0
 var msg_last := ""
 var msg_seen := 0
@@ -182,7 +184,7 @@ func _ready() -> void:
 
 	settings_ui = SettingsMenu.new()
 	settings_ui.name = "SettingsMenu"
-	settings_ui.back_pressed.connect(_enter_menu)
+	settings_ui.back_pressed.connect(_on_settings_back)
 	settings_ui.set_anchors_preset(Control.PRESET_FULL_RECT, false)
 	ui_root.add_child(settings_ui)
 
@@ -261,6 +263,17 @@ func _build_pause_ui(parent: Node) -> void:
 	var cont := _overlay_btn("▶ Continuar  (ESC)")
 	cont.pressed.connect(func(): _set_pause(false))
 	v.add_child(cont)
+
+	var sh := _overlay_btn("🛒 Loja  (TAB)")
+	sh.pressed.connect(func():
+		_set_pause(false)
+		_open_shop()
+	)
+	v.add_child(sh)
+
+	var cfg := _overlay_btn("⚙ Configurações")
+	cfg.pressed.connect(func(): _enter_settings(State.PAUSE))
+	v.add_child(cfg)
 
 	var menu := _overlay_btn("🏠 Menu principal")
 	menu.pressed.connect(func(): _enter_menu())
@@ -488,12 +501,23 @@ func _on_menushop_back() -> void:
 	else:
 		_enter_menu()
 
-func _enter_settings() -> void:
+var _settings_return = State.MENU
+
+func _enter_settings(ret: State = State.MENU) -> void:
 	state = State.SETTINGS
+	_settings_return = ret
 	settings = GameSettings.load_data()
 	_hide_all()
 	settings_ui.visible = true
 	settings_ui.build(settings)
+
+func _on_settings_back() -> void:
+	if _settings_return == State.PAUSE and state == State.SETTINGS:
+		_hide_all()
+		pause_layer.visible = true
+		state = State.PAUSE
+	else:
+		_enter_menu()
 
 func _enter_multi() -> void:
 	state = State.MULTI
@@ -811,6 +835,7 @@ func _start_wave(idx: int) -> void:
 	wave_spawned = 0
 	wave_killed = 0
 	wave_active = true
+	_show_banner("ONDA %d/15" % StageData.global_wave(cur_stage, idx))
 	boss_left = 0
 	mini_left = 0
 	_spawn_timer = 0.0
@@ -934,6 +959,52 @@ func _on_victory() -> void:
 	if _relay():
 		netplay.force_state.rpc(1)
 
+func _complete_wave() -> void:
+	wave_active = false
+	if wave_idx >= StageData.WAVES_PER_STAGE - 1:
+		_on_victory()
+		return
+	between_timer = BETWEEN_DELAY
+	# Respiro entre ondas + cura honesta (TAB = loja).
+	for pl in _all_players():
+		(pl as Player).heal(int((pl as Player).max_hp * 0.20))
+	# Essência ◆ = moeda meta: só de ondas/fases, nunca de kills.
+	var bonus := StageData.essence_for_wave(cur_stage, wave_idx, cur_diff)
+	var total := StageData.add_essence(progress, bonus)
+	_float_text("+%d ◆" % bonus, player.position + Vector2(0, -56), Color(0.55, 0.85, 1), 13)
+	say("Onda %d/5 limpa! +%d ◆ (banco: %d) — TAB = loja" % [wave_idx + 1, bonus, total])
+
+## Tem chefão, mini ou elite vivo? (trava o passe automático)
+func _tough_alive() -> bool:
+	for e in enemies:
+		if is_instance_valid(e) and e.is_alive() \
+				and (e.is_boss() or e.is_miniboss() or e.is_elite):
+			return true
+	return false
+
+## Limpa os restantes (fugiram) e completa a onda.
+func _free_remaining() -> void:
+	var i := enemies.size() - 1
+	while i >= 0:
+		var e = enemies[i]
+		if is_instance_valid(e):
+			e.queue_free()
+		enemies.remove_at(i)
+		i -= 1
+
+## Pulo manual (N / ⏭): vale para a onda atual, chefão incluso.
+func _skip_wave() -> void:
+	if state != State.PLAY or not wave_active:
+		return
+	say("⏭ Onda pulada!")
+	_free_remaining()
+	_show_banner("⏭ ONDA PULADA!")
+	_complete_wave()
+
+func _show_banner(txt: String) -> void:
+	wave_banner_txt = txt
+	wave_banner_t = 2.4
+
 func _find_label(root: Node, name: String) -> Label:
 	if root.name == name and root is Label:
 		return root
@@ -957,6 +1028,8 @@ func _physics_process(delta: float) -> void:
 		return
 	game_time += delta
 	_apply_ally_input()
+	if wave_banner_t > 0.0:
+		wave_banner_t -= delta
 
 	# ---- Lógica de waves ----
 	var alive := 0
@@ -975,18 +1048,16 @@ func _physics_process(delta: float) -> void:
 			_spawn_next()
 		# Onda completa quando matou a cota (inclui o chefão).
 		if wave_killed >= wave_quota:
-			wave_active = false
-			if wave_idx >= StageData.WAVES_PER_STAGE - 1:
-				_on_victory()
+			_complete_wave()
+			if state != State.PLAY:
 				return
-			between_timer = BETWEEN_DELAY
-			# Respiro entre ondas + cura honesta (TAB = loja).
-			player.heal(int(player.max_hp * 0.20))
-			# Essência ◆ = moeda meta: só de ondas/fases, nunca de kills.
-			var bonus := StageData.essence_for_wave(cur_stage, wave_idx, cur_diff)
-			var total := StageData.add_essence(progress, bonus)
-			_float_text("+%d ◆" % bonus, player.position + Vector2(0, -56), Color(0.55, 0.85, 1), 13)
-			say("Onda %d/5 limpa! +%d ◆ (banco: %d) — TAB = loja" % [wave_idx + 1, bonus, total])
+		elif wave_active and wave_killed >= int(wave_quota * 0.9) and not _tough_alive():
+			# 90% limpa sem chefão/elite vivo: passa sozinha (anti-trava).
+			say("Onda quase limpa — avançando!")
+			_free_remaining()
+			_complete_wave()
+			if state != State.PLAY:
+				return
 	else:
 		# Intervalo entre ondas.
 		if wave_killed >= wave_quota and state == State.PLAY:
@@ -1148,15 +1219,18 @@ func _apply_ally_input() -> void:
 			_toggle_channel(pl)
 		if bool(inp.get("item", false)):
 			_use_first_item(pl)
+		if bool(inp.get("skip", false)):
+			_skip_wave()
 		inp.atk = false
 		inp.sk = [false, false, false, false, false]
 		inp.channel = false
 		inp.item = false
+		inp.skip = false
 
-func mp_on_input(pid: int, move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
+func mp_on_input(pid: int, move: Vector2, atk: bool, sk: Array, channel: bool, item: bool, skip: bool) -> void:
 	if not net_ins.has(pid):
 		net_ins[pid] = { move = Vector2.ZERO, atk = false,
-			sk = [false, false, false, false, false], channel = false, item = false }
+			sk = [false, false, false, false, false], channel = false, item = false, skip = false }
 	var inp: Dictionary = net_ins[pid]
 	inp.move = move
 	if atk:
@@ -1169,6 +1243,8 @@ func mp_on_input(pid: int, move: Vector2, atk: bool, sk: Array, channel: bool, i
 		inp.channel = true
 	if item:
 		inp.item = true
+	if skip:
+		inp.skip = true
 
 func _pack_player(pl, key: int = 0) -> Array:
 	if pl == null or not is_instance_valid(pl):
@@ -1259,7 +1335,7 @@ func _send_input_tick(delta: float) -> void:
 	var sk := []
 	for i in 5:
 		sk.append(_edge("skill%d" % (i + 1)))
-	netplay.send_input(mv, _edge("attack"), sk, _edge("channel"), _edge("item"))
+	netplay.send_input(mv, _edge("attack"), sk, _edge("channel"), _edge("item"), _edge("skip"))
 
 func touch_active() -> bool:
 	var m := int(settings.get("touch", 0))
@@ -1309,6 +1385,8 @@ func touch_button(id: String) -> void:
 				say("Sem pausa no multiplayer!")
 			else:
 				_set_pause(true)
+		"skip":
+			_skip_wave()
 		_:
 			if id.begins_with("skill"):
 				_do_cast(int(id.trim_prefix("skill")) - 1)
@@ -1613,6 +1691,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					else:
 						_set_pause(true)
 					get_viewport().set_input_as_handled()
+				elif GameSettings.match_key(settings, "skip", key):
+					_skip_wave()
+					get_viewport().set_input_as_handled()
 				elif GameSettings.match_key(settings, "attack", key):
 					_do_basic_attack()
 					get_viewport().set_input_as_handled()
@@ -1641,12 +1722,22 @@ func _open_shop() -> void:
 		say("Loja aberta — o jogo continua! TAB fecha.")
 		return
 	state = State.SHOP
+	_set_ally_controlled(false)
 	shop.open()
 
 func _close_shop() -> void:
 	shop.close()
 	if mp == 0:
 		state = State.PLAY
+		_set_ally_controlled(true)
+
+## Trava/destrava o movimento com a loja aberta (solo pausa o mundo).
+func _set_ally_controlled(v: bool) -> void:
+	if player != null and is_instance_valid(player):
+		player.controlled = v
+	for pl in allies:
+		if pl != null and is_instance_valid(pl):
+			(pl as Player).controlled = v
 
 func _set_pause(v: bool) -> void:
 	pause_layer.visible = v

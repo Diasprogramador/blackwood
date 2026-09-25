@@ -57,6 +57,7 @@ func _buttons() -> Array:
 	out.append({ id = "channel", c = _bp(150, h - 235, mir, w), r = 26.0 * s })
 	out.append({ id = "shop", c = _bp(w - 95, 175, mir, w), r = 22.0 * s })
 	out.append({ id = "pause", c = _bp(w - 40, 175, mir, w), r = 22.0 * s })
+	out.append({ id = "skip", c = _bp(w - 150, 175, mir, w), r = 22.0 * s })
 	return out
 
 func _bp(x: float, y: float, mir: bool, w: float) -> Vector2:
@@ -174,6 +175,8 @@ func _draw_button(font: Font, b: Dictionary, role: String, pl) -> void:
 		_center(font, "LOJA", c.x, c.y + 4, 10, Color(1, 0.85, 0.2))
 	elif id == "pause":
 		_center(font, "II", c.x, c.y + 5, 13, Color.WHITE)
+	elif id == "skip":
+		_center(font, "⏭", c.x, c.y + 5, 14, Color(1, 0.85, 0.2))
 
 func _draw_skill_button(font: Font, c: Vector2, r: float, id: String, role: String, pl) -> void:
 	var slot := int(id.trim_prefix("skill")) - 1

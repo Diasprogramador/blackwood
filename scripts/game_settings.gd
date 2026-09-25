@@ -25,6 +25,7 @@ const ACTIONS := [
 	{ id = "item", label = "Usar item", def = [KEY_Q] },
 	{ id = "shop", label = "Abrir loja", def = [KEY_TAB] },
 	{ id = "pause", label = "Pausar", def = [KEY_ESCAPE] },
+	{ id = "skip", label = "Pular onda", def = [KEY_N] },
 ]
 
 static func default_data() -> Dictionary:

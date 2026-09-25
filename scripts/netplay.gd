@@ -127,10 +127,10 @@ func ready() -> void:
 		main.mp_on_ready(_sender())
 
 @rpc("any_peer", "unreliable")
-func push_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
+func push_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool, skip: bool) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_on_input"):
-		main.mp_on_input(_sender(), move, atk, sk, channel, item)
+		main.mp_on_input(_sender(), move, atk, sk, channel, item, skip)
 
 @rpc("any_peer", "reliable")
 func req_upgrade(idx: int) -> void:
@@ -210,10 +210,10 @@ func to_menu() -> void:
 # ----------------------------------------------------------------------
 #  Envio (chamados pelo main no lado certo)
 # ----------------------------------------------------------------------
-func send_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
+func send_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool, skip: bool) -> void:
 	if mode != 2:
 		return
-	push_input.rpc(move, atk, sk, channel, item)
+	push_input.rpc(move, atk, sk, channel, item, skip)
 
 func send_hello(champ_idx: int) -> void:
 	if mode != 2:

@@ -71,7 +71,7 @@ func setup(type_key_p: String, lvl: int, mults: Dictionary = {}) -> void:
 	# Escala por nível: combate sobe rápido, economia sobe devagar (balance).
 	max_hp = maxi(1, int((int(td.hp) + (level - 1) * 18) * float(mults.get("hp", 1.0))))
 	hp = max_hp
-	attack = maxi(1, int((int(td.atk) + (level - 1) * 3) * float(mults.get("atk", 1.0))))
+	attack = maxi(1, int((int(td.atk) + (level - 1) * 2) * float(mults.get("atk", 1.0))))
 	defense = maxi(0, int((int(td.def) + (level - 1) * 1) * float(mults.get("df", 1.0))))
 	magic = int(td.mag) + (level - 1) * 2
 	gold_reward = maxi(1, int((int(td.gold) + (level - 1) * 3) * float(mults.get("gold", 1.0))))

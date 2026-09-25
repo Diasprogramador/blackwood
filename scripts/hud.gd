@@ -50,6 +50,7 @@ func _draw() -> void:
 
 	_draw_top_left(p)
 	_draw_wave_banner(w)
+	_draw_banner(w, h)
 	_draw_minimap(p, w)
 	_draw_skill_bar(p, w, h)
 	_draw_messages(w, h)
@@ -221,6 +222,23 @@ func _draw_boss_bar(screen_w: float) -> void:
 	draw_rect(Rect2(bx, by + 16, bw, 7), Color(0, 0, 0, 0.85))
 	draw_rect(Rect2(bx, by + 16, bw * ratio, 7), col)
 	draw_rect(Rect2(bx, by + 16, bw, 7), Color(1, 1, 1, 0.4), false, 1.0)
+
+# ---------------------------------------------------------------------
+func _draw_banner(screen_w: float, screen_h: float) -> void:
+	var t := float(main.get("wave_banner_t", 0.0))
+	if t <= 0.0:
+		return
+	var txt := str(main.get("wave_banner_txt", ""))
+	if txt == "":
+		return
+	var font := ThemeDB.fallback_font
+	var a := clampf(t / 0.8, 0.0, 1.0)
+	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 44).x
+	var pos := Vector2(screen_w / 2.0 - tw / 2.0, screen_h * 0.38)
+	draw_string(font, pos + Vector2(3, 3), txt,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 44, Color(0, 0, 0, a * 0.85))
+	draw_string(font, pos, txt,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 44, Color(1, 0.85, 0.3, a))
 
 # ---------------------------------------------------------------------
 func _draw_minimap(p: Player, screen_w: float) -> void:

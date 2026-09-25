@@ -38,9 +38,9 @@ const STAGES := [
 ]
 
 const DIFFS := [
-	{ name = "NORMAL", hp = 1.0, atk = 1.0, df = 1.0, count = 1.0, exp = 1.0, gold = 1.0, speed = 1.0, color = Color(0.6, 0.8, 0.6) },
-	{ name = "MÉDIO", hp = 1.5, atk = 1.3, df = 1.3, count = 1.25, exp = 1.2, gold = 1.2, speed = 1.1, color = Color(1, 0.85, 0.3) },
-	{ name = "HARD", hp = 2.0, atk = 1.8, df = 1.7, count = 1.5, exp = 1.5, gold = 1.5, speed = 1.2, color = Color(1, 0.5, 0.2) },
+	{ name = "NORMAL", hp = 1.0, atk = 0.85, df = 1.0, count = 1.0, exp = 1.0, gold = 1.0, speed = 1.0, color = Color(0.6, 0.8, 0.6) },
+	{ name = "MÉDIO", hp = 1.5, atk = 1.15, df = 1.3, count = 1.25, exp = 1.2, gold = 1.2, speed = 1.1, color = Color(1, 0.85, 0.3) },
+	{ name = "HARD", hp = 2.0, atk = 1.7, df = 1.7, count = 1.5, exp = 1.5, gold = 1.5, speed = 1.2, color = Color(1, 0.5, 0.2) },
 	{ name = "IMPOSSÍVEL", hp = 2.9, atk = 2.6, df = 2.2, count = 2.0, exp = 2.0, gold = 1.8, speed = 1.3, color = Color(0.9, 0.2, 0.3) },
 ]
 
