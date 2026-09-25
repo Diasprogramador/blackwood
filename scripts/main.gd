@@ -955,7 +955,7 @@ func _physics_process(delta: float) -> void:
 		_host_net_tick(delta)
 
 ## Vivo mais próximo (co-op) ou o jogador.
-func _nearest_alive(pos: Vector2):
+func _nearest_alive(pos: Vector2) -> Player:
 	var best = null
 	var best_d := INF
 	for pl in [player, player2]:
