@@ -4,7 +4,7 @@ extends Node2D
 ## spawn, câmera, drop de gold e integração das UIs.
 ## Port de Main.java (modo gráfico) + GamePanel.java (loop, spawn, input, overlays).
 
-enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY }
+enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI }
 
 const WorldScript := preload("res://scripts/world.gd")
 const PlayerScript := preload("res://scripts/player.gd")
@@ -19,6 +19,27 @@ var player: Player
 var camera: Camera2D
 var enemies: Array = []
 var shots: Array = []  # projéteis inimigos (ticados só em PLAY)
+# Multiplayer (0 solo, 1 host, 2 client). Host simula tudo; client renderiza.
+var netplay: Netplay = null
+var mult_ui: MultiMenu = null
+var mp := 0
+var player2: Player = null
+var mp_armed := false  # host vai jogar em dupla
+var client_pick := false  # client escolhendo campeão
+var mp_own_champ := 2
+var mp_ally_champ := 2
+var mp_ally_ready := false
+var mp_seed := -1
+var mp_foes := {}  # client: net_id -> Enemy
+var net_in := { move = Vector2.ZERO, atk = false, sk = [false, false, false, false, false], channel = false, item = false }
+var snap_t := 0.0
+var esnap_t := 0.0
+var wsnap_t := 0.0
+var input_t := 0.0
+var msg_seq := 0
+var msg_seen := 0
+var mp_prev := {}
+var net_id_counter := 0
 var kill_count := 0
 var game_time := 0.0
 var minimap_tex: ImageTexture
@@ -68,6 +89,14 @@ func _ready() -> void:
 	settings = GameSettings.load_data()
 	GameSettings.apply_video(settings)
 	Sfx.ensure_buses(settings)
+
+	netplay = Netplay.new()
+	netplay.name = "Netplay"
+	add_child(netplay)
+	netplay.peer_joined.connect(_mp_peer_joined)
+	netplay.peer_left.connect(_mp_peer_left)
+	netplay.server_ready.connect(_mp_server_ready)
+	netplay.connect_failed.connect(_mp_connect_failed)
 
 	world = WorldScript.new()
 	world.name = "World"
@@ -138,6 +167,7 @@ func _ready() -> void:
 	menu_ui = MainMenu.new()
 	menu_ui.name = "MainMenu"
 	menu_ui.play_pressed.connect(_enter_champ)
+	menu_ui.multi_pressed.connect(_enter_multi)
 	menu_ui.shop_pressed.connect(func(): _enter_menushop(State.MENU))
 	menu_ui.settings_pressed.connect(_enter_settings)
 	menu_ui.exit_pressed.connect(func(): get_tree().quit())
@@ -149,6 +179,15 @@ func _ready() -> void:
 	settings_ui.back_pressed.connect(_enter_menu)
 	settings_ui.set_anchors_preset(Control.PRESET_FULL_RECT, false)
 	ui_root.add_child(settings_ui)
+
+	mult_ui = MultiMenu.new()
+	mult_ui.name = "MultiMenu"
+	mult_ui.host_pressed.connect(_mp_host_go)
+	mult_ui.join_pressed.connect(_mp_join_go)
+	mult_ui.back_pressed.connect(_mp_lobby_back)
+	mult_ui.cancel_pressed.connect(_mp_lobby_cancel)
+	mult_ui.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	ui_root.add_child(mult_ui)
 
 	_build_pause_ui(ui_root)
 	_build_gameover_ui(ui_root)
@@ -368,9 +407,18 @@ func _hide_all() -> void:
 	menushop_ui.visible = false
 	menu_ui.visible = false
 	settings_ui.visible = false
+	mult_ui.visible = false
 
 func _enter_menu() -> void:
 	state = State.MENU
+	if mp == 1:
+		netplay.to_menu.rpc()
+		netplay.leave()
+	if mp == 2:
+		netplay.leave()
+	mp = 0
+	mp_armed = false
+	client_pick = false
 	_clear_world()
 	settings = GameSettings.load_data()
 	progress = StageData.load_progress()
@@ -391,6 +439,7 @@ func _enter_stage() -> void:
 	_hide_all()
 	stage_ui.visible = true
 	stage_ui.build(progress, cur_stage, cur_diff)
+	_stage_ally_line()
 
 func _enter_menushop(from: State) -> void:
 	state = State.MENUSHOP
@@ -415,14 +464,127 @@ func _enter_settings() -> void:
 	settings_ui.visible = true
 	settings_ui.build(settings)
 
+func _enter_multi() -> void:
+	state = State.MULTI
+	_clear_world()
+	mp = 0
+	mp_armed = false
+	client_pick = false
+	netplay.leave()
+	_hide_all()
+	mult_ui.visible = true
+	mult_ui.build_choice()
+
+func _mp_host_go() -> void:
+	if mp == 1:
+		mp_armed = true
+		_enter_champ()
+		return
+	var err := netplay.host(Netplay.PORT)
+	if err != "":
+		Sfx.play(self, "error")
+		_hide_all()
+		mult_ui.visible = true
+		mult_ui.build_choice()
+		return
+	mp = 1
+	mp_armed = false
+	mp_ally_ready = false
+	_hide_all()
+	mult_ui.visible = true
+	mult_ui.build_host(netplay.local_ip, Netplay.PORT, netplay.upnp_info)
+
+func _mp_join_go(ip: String, port: int) -> void:
+	var err := netplay.join(ip, port)
+	_hide_all()
+	mult_ui.visible = true
+	if err != "":
+		Sfx.play(self, "error")
+		mult_ui.build_join(err)
+	else:
+		mult_ui.build_join("Conectando a %s:%d…" % [ip.strip_edges(), port])
+
+func _mp_lobby_back() -> void:
+	_enter_menu()
+
+func _mp_lobby_cancel() -> void:
+	_enter_menu()
+
+func _mp_server_ready() -> void:
+	# Cliente conectou: escolhe o campeão.
+	mp = 2
+	client_pick = true
+	mp_own_champ = _selected
+	_enter_champ()
+
+func _mp_connect_failed() -> void:
+	Sfx.play(self, "error")
+	_hide_all()
+	mult_ui.visible = true
+	mult_ui.build_join("Falha: host offline ou IP/porta errados.")
+
+func _mp_peer_joined(_id: int) -> void:
+	if mp == 1 and state == State.MULTI:
+		mult_ui.set_status("Amigo conectado! Escolha seu campeão →")
+	elif state == State.PLAY:
+		say("Amigo entrou na arena!")
+
+func _mp_peer_left(_id: int) -> void:
+	if mp == 1:
+		if state == State.PLAY and player2 != null:
+			if is_instance_valid(player2):
+				player2.queue_free()
+			player2 = null
+			mp_ally_ready = false
+			say("Amigo desconectou — run solo agora.")
+		elif state == State.MULTI:
+			mp_ally_ready = false
+			mult_ui.set_status("Amigo saiu.")
+	elif mp == 2:
+		_enter_menu()
+
 func _on_champ_chosen(champ_idx: int) -> void:
 	_selected = clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)
+	if mp == 2 and client_pick:
+		mp_own_champ = _selected
+		client_pick = false
+		netplay.send_hello(mp_own_champ)
+		_hide_all()
+		mult_ui.visible = true
+		mult_ui.build_waiting(str(ChampData.CHAMPS[mp_own_champ].get("nome", "?")))
+		return
 	_enter_stage()
 
+func mp_on_hello(champ_idx: int) -> void:
+	mp_ally_champ = clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)
+
+func mp_on_ready() -> void:
+	mp_ally_ready = true
+	if state == State.STAGE:
+		stage_ui._refresh()
+		_stage_ally_line()
+
+func _stage_ally_line() -> void:
+	if mp == 1 and mp_armed and stage_ui._info_label != null:
+		if mp_ally_ready:
+			stage_ui._info_label.text += "   •   P2: %s PRONTO" % str(ChampData.CHAMPS[mp_ally_champ].get("nome", "?"))
+		else:
+			stage_ui._info_label.text += "   •   aguardando P2…"
+
 func _on_stage_start(stage_idx: int, diff_idx: int) -> void:
+	if mp == 1 and mp_armed:
+		if not netplay.has_ally() or not mp_ally_ready:
+			Sfx.play(self, "error")
+			stage_ui._refresh()
+			stage_ui._info_label.text = "Aguardando amigo conectar e ficar pronto…"
+			return
+		mp_seed = randi()
+		start_game(_selected, stage_idx, diff_idx, mp_seed, mp_ally_champ)
+		netplay.begin.rpc(mp_seed, cur_stage, cur_diff, _selected)
+		return
 	start_game(_selected, stage_idx, diff_idx)
 
-func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1) -> void:
+func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, seed_value: int = -1, ally_idx: int = -1) -> void:
 	# R do gameover/vitória repete a mesma combinação.
 	if champ_idx < 0:
 		champ_idx = _selected
@@ -436,7 +598,7 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1) ->
 	progress = StageData.load_progress()
 	_clear_world()
 
-	world.generate()
+	world.generate(seed_value)
 	world.apply_stage(cur_stage)
 	minimap_tex = world.build_minimap_image()
 
@@ -456,12 +618,38 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1) ->
 	player.died.connect(_on_player_died)
 	player.leveled_up.connect(func(msg):
 		if msg != "":
-			hud.add_message(msg)
+			say(msg)
 			_float_text(msg, player.position + Vector2(0, -40), Color(1, 0.9, 0.4), 13)
 			Sfx.play(self, "levelup")
 	)
 	entities.add_child(player)
 	camera.position = player.position
+
+	if ally_idx >= 0:
+		var c2: Dictionary = ChampData.CHAMPS[clampi(ally_idx, 0, ChampData.CHAMPS.size() - 1)]
+		player2 = PlayerScript.new()
+		player2.name = "Player2"
+		player2.world = world
+		var cfgs2: Array = []
+		var unl2: Array = StageData.unlocked_skills(progress, str(c2.role))
+		var rskills2: Array = ChampData.ROLES[str(c2.role)].skills
+		for i in mini(rskills2.size(), unl2.size()):
+			if bool(unl2[i]):
+				cfgs2.append(rskills2[i])
+		player2.setup(str(c2.get("nome", "?")), str(c2.get("role", "tank")), cfgs2)
+		player2.position = world.center_px() + Vector2(40, 0)
+		player2.died.connect(_on_player_died)
+		player2.leveled_up.connect(func(msg):
+			if msg != "":
+				say(msg)
+		)
+		if mp == 1:
+			# Host simula o aliado com os inputs que chegam pela rede.
+			player2.controlled = true
+			player2.use_ext = true
+		else:
+			player2.controlled = false
+		entities.add_child(player2)
 
 	kill_count = 0
 	game_time = 0.0
@@ -473,17 +661,19 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1) ->
 	hud.visible = true
 	state = State.PLAY
 
-	_start_wave(0)
+	# Client não roda waves (recebe tudo do host).
+	if mp != 2:
+		_start_wave(0)
 	var nskills := player.skills.size()
 	var atk_key := GameSettings.key_label(settings, "attack")
 	var shop_key := GameSettings.key_label(settings, "shop")
 	if nskills == 0:
-		hud.add_message("Bem-vindo, %s! %s • %s" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff)])
-		hud.add_message("Só ATK por enquanto — ganhe ◆ nas ondas e desbloqueie skills na LOJA!")
+		say("Bem-vindo, %s! %s • %s" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff)])
+		say("Só ATK por enquanto — ganhe ◆ nas ondas e desbloqueie skills na LOJA!")
 	else:
-		hud.add_message("Bem-vindo, %s! %s • %s (%d/5 skills)" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff), nskills])
-		hud.add_message("%s = soco | 1-%d = skills | %s = loja" % [atk_key, nskills, shop_key])
-	hud.add_message("Mana é curta: cada skill conta! Sobreviva às 5 ondas!")
+		say("Bem-vindo, %s! %s • %s (%d/5 skills)" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff), nskills])
+		say("%s = soco | 1-%d = skills | %s = loja" % [atk_key, nskills, shop_key])
+	say("Mana é curta: cada skill conta! Sobreviva às 5 ondas!")
 
 func _start_wave(idx: int) -> void:
 	wave_idx = idx
@@ -501,15 +691,15 @@ func _start_wave(idx: int) -> void:
 		# Final: chefão (+1 extra no IMPOSSÍVEL) SEMPRE com mini-bosses junto.
 		boss_left = 2 if cur_diff >= 3 else 1
 		mini_left = 1 if cur_diff < 2 else 2
-		hud.add_message("★ ONDA FINAL %d/15 — BOSS %s + %d MINI-BOSS! ★" % [gw, StageData.boss_type(cur_stage), mini_left])
+		say("★ ONDA FINAL %d/15 — BOSS %s + %d MINI-BOSS! ★" % [gw, StageData.boss_type(cur_stage), mini_left])
 		add_shake(6.0)
 	elif is_mid:
 		# Meio da run: mini-boss (2 no HARD+). A cada 5 ondas tem mini-boss.
 		mini_left = 1 if cur_diff < 2 else 2
-		hud.add_message("👹 ONDA %d/15 (%s %d/5) — MINI-BOSS à vista! — %d inimigos!" % [gw, StageData.stage_name(cur_stage), idx + 1, wave_quota])
+		say("👹 ONDA %d/15 (%s %d/5) — MINI-BOSS à vista! — %d inimigos!" % [gw, StageData.stage_name(cur_stage), idx + 1, wave_quota])
 		add_shake(4.0)
 	else:
-		hud.add_message("— ONDA %d/15 (%s %d/5) — %d inimigos!" % [gw, StageData.stage_name(cur_stage), idx + 1, wave_quota])
+		say("— ONDA %d/15 (%s %d/5) — %d inimigos!" % [gw, StageData.stage_name(cur_stage), idx + 1, wave_quota])
 	# Enche a arena até o teto da fase (pressão imediata).
 	var cap := StageData.alive_cap(cur_stage, cur_diff)
 	for i in mini(cap, wave_quota):
@@ -549,6 +739,10 @@ func _clear_world() -> void:
 	if player != null and is_instance_valid(player):
 		player.queue_free()
 		player = null
+	if player2 != null and is_instance_valid(player2):
+		player2.queue_free()
+		player2 = null
+	mp_foes.clear()
 	wave_active = false
 	between_timer = 0.0
 	boss_left = 0
@@ -640,7 +834,7 @@ func _physics_process(delta: float) -> void:
 			var bonus := StageData.essence_for_wave(cur_stage, wave_idx, cur_diff)
 			var total := StageData.add_essence(progress, bonus)
 			_float_text("+%d ◆" % bonus, player.position + Vector2(0, -56), Color(0.55, 0.85, 1), 13)
-			hud.add_message("Onda %d/5 limpa! +%d ◆ (banco: %d) — TAB = loja" % [wave_idx + 1, bonus, total])
+			say("Onda %d/5 limpa! +%d ◆ (banco: %d) — TAB = loja" % [wave_idx + 1, bonus, total])
 	else:
 		# Intervalo entre ondas.
 		if wave_killed >= wave_quota and state == State.PLAY:
@@ -733,6 +927,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			State.SETTINGS:
 				if settings_ui.handle_key(key):
 					get_viewport().set_input_as_handled()
+			State.MULTI:
+				if key == KEY_ESCAPE:
+					_mp_lobby_back()
+				get_viewport().set_input_as_handled()
 			State.CHAMP:
 				if select_ui.handle_key(key):
 					get_viewport().set_input_as_handled()
@@ -806,11 +1004,11 @@ func _toggle_channel() -> void:
 		return
 	var started := player.toggle_channel()
 	if started:
-		hud.add_message("Canalizando mana... (fique parado!) Pressione E para sair.")
+		say("Canalizando mana... (fique parado!) Pressione E para sair.")
 	elif player.channeling == false and player.mana >= player.max_mana:
-		hud.add_message("Mana já está cheia!")
+		say("Mana já está cheia!")
 	else:
-		hud.add_message("Canalização cancelada.")
+		say("Canalização cancelada.")
 	player.queue_redraw()
 
 func _do_basic_attack() -> void:
@@ -819,7 +1017,7 @@ func _do_basic_attack() -> void:
 	var result = player.basic_attack(enemies)
 	if result == null:
 		if player.attack_cd <= 0.0 and not player.channeling:
-			hud.add_message("Nenhum alvo no alcance! (%dpx)" % player.attack_range)
+			say("Nenhum alvo no alcance! (%dpx)" % player.attack_range)
 		return
 	var target = result.target
 	var pos: Vector2 = target.position
@@ -838,11 +1036,11 @@ func _do_cast(index: int) -> void:
 	if player == null:
 		return
 	if index >= player.skills.size():
-		hud.add_message("Slot %d bloqueado — desbloqueie skills no menu (◆)!" % (index + 1))
+		say("Slot %d bloqueado — desbloqueie skills no menu (◆)!" % (index + 1))
 		return
 	var result: Dictionary = player.cast_skill(index, enemies)
 	if not result.get("ok", false):
-		hud.add_message(result.get("reason", "Sem mana / em cooldown!"))
+		say(result.get("reason", "Sem mana / em cooldown!"))
 		return
 	if result.kind == "heal":
 		_spawn_heal(player.position)
@@ -859,7 +1057,7 @@ func _do_cast(index: int) -> void:
 	if index >= 4:
 		add_shake(5.0)
 	_float_text(str(result.dmg), target.position + Vector2(0, -30), Color(0.5, 0.9, 1), 14)
-	hud.add_message("%s %s! −%d" % [SkillIcon.glyph(player.role, str(result.kind), index), result.name, result.dmg])
+	say("%s %s! −%d" % [SkillIcon.glyph(player.role, str(result.kind), index), result.name, result.dmg])
 	if not target.is_alive():
 		_on_enemy_killed(target)
 
@@ -867,16 +1065,16 @@ func try_buy_upgrade(idx: int) -> void:
 	if player == null:
 		return
 	if player.buy_upgrade(idx):
-		hud.add_message("Comprado: %s" % ChampData.UPGRADE_DESCS[idx])
+		say("Comprado: %s" % ChampData.UPGRADE_DESCS[idx])
 		Sfx.play(self, "buy")
 		_spawn_heal(player.position)
 	else:
-		hud.add_message("Gold insuficiente!")
+		say("Gold insuficiente!")
 		Sfx.play(self, "error")
 
 func _use_first_item() -> void:
 	if player == null or player.inventory.is_empty():
-		hud.add_message("Inventário vazio! Compre itens na loja (TAB).")
+		say("Inventário vazio! Compre itens na loja (TAB).")
 		return
 	# usa o primeiro consumível (equip vai para equipar via loja/inventário)
 	var used := false
@@ -885,7 +1083,7 @@ func _use_first_item() -> void:
 		if item is Equipment:
 			continue
 		if player.use_item(i):
-			hud.add_message("Usou: %s" % item.name)
+			say("Usou: %s" % item.name)
 			Sfx.play(self, "potion")
 			_spawn_heal(player.position)
 			_float_text(item.name, player.position + Vector2(0, -40),
@@ -900,9 +1098,9 @@ func _use_first_item() -> void:
 				eq_name = player.weapon.name
 			elif player.armor:
 				eq_name = player.armor.name
-			hud.add_message("Equipou: %s" % eq_name)
+			say("Equipou: %s" % eq_name)
 		else:
-			hud.add_message("Nada para usar agora.")
+			say("Nada para usar agora.")
 
 # =====================================================================
 #  MORTE DE INIMIGO → GOLD DROP + PROGRESSO DA ONDA
@@ -916,13 +1114,13 @@ func _on_enemy_killed(e) -> void:
 	# chefões balançam muito a tela
 	if e.is_boss():
 		add_shake(12.0)
-		hud.add_message("★ BOSS derrotado! +%d XP • +%d gold ★" % [e.exp_reward, e.gold_reward])
+		say("★ BOSS derrotado! +%d XP • +%d gold ★" % [e.exp_reward, e.gold_reward])
 	elif e.is_miniboss():
 		add_shake(9.0)
-		hud.add_message("👹 MINI-BOSS derrotado! +%d XP • +%d gold" % [e.exp_reward, e.gold_reward])
+		say("👹 MINI-BOSS derrotado! +%d XP • +%d gold" % [e.exp_reward, e.gold_reward])
 	elif e.is_elite:
 		add_shake(7.0)
-		hud.add_message("◆ ELITE caiu! +%d XP" % e.exp_reward)
+		say("◆ ELITE caiu! +%d XP" % e.exp_reward)
 	else:
 		add_shake(4.0)
 
@@ -951,7 +1149,7 @@ func _on_enemy_killed(e) -> void:
 	if wave_active:
 		var left := maxi(0, wave_quota - wave_killed)
 		if left > 0 and left % 5 == 0:
-			hud.add_message("Faltam %d na onda %d/5!" % [left, wave_idx + 1])
+			say("Faltam %d na onda %d/5!" % [left, wave_idx + 1])
 
 # =====================================================================
 #  SPAWN / FX
@@ -1003,7 +1201,7 @@ func _spawn_boss() -> void:
 	entities.add_child(e)
 	enemies.append(e)
 	wave_spawned += 1
-	hud.add_message("★★ %s Lv.%d apareceu! ★★" % [e.type_name, lvl])
+	say("★★ %s Lv.%d apareceu! ★★" % [e.type_name, lvl])
 	add_shake(8.0)
 
 ## Mini-boss: um brutamontes (Golem/Jungle) com 2.4x HP. Aparece no meio
@@ -1036,7 +1234,7 @@ func _spawn_miniboss() -> void:
 	entities.add_child(e)
 	enemies.append(e)
 	wave_spawned += 1
-	hud.add_message("👹 MINI-BOSS %s Lv.%d apareceu!" % [e.type_name, lvl])
+	say("👹 MINI-BOSS %s Lv.%d apareceu!" % [e.type_name, lvl])
 	add_shake(6.0)
 
 func _spawn_minion(force_elite: bool = false) -> void:
@@ -1096,9 +1294,18 @@ func add_shake(amount: float) -> void:
 		return
 	shake = minf(14.0, shake + amount)
 
+## Mensagem no HUD (+ fila para o cliente no multiplayer).
+func say(text: String) -> void:
+	hud.add_message(text)
+	if mp == 1:
+		msg_seq += 1
+		msg_last = text
+
 func _float_text(msg: String, pos: Vector2, col: Color, size: int) -> void:
 	if msg == "":
 		return
+	if mp == 1:
+		netplay.float_txt.rpc(msg, pos.x, pos.y, col, size)
 	var ft = FloatingTextScript.new()
 	fx_layer.add_child(ft)
 	ft.setup(msg, col, pos, size, 1.1)
@@ -1121,13 +1328,19 @@ func _spawn_skill_vfx(role: String, kind: String, pos: Vector2, big: bool) -> vo
 
 ## Efeito de ataque do personagem (tipo vem do SkillIcon, escala por slot).
 func _spawn_role_fx(pos: Vector2, fx_type: int, scale_p: float = 1.0) -> void:
+	if mp == 1:
+		netplay.fx_spawn.rpc(fx_type, pos.x, pos.y, scale_p)
 	fx_layer.add_child(AttackEffect.new(
 		fx_type, pos.x, pos.y, randf_range(-0.3, 0.3), scale_p))
 
 func _spawn_heal(pos: Vector2) -> void:
+	if mp == 1:
+		netplay.fx_spawn.rpc(AttackEffect.Type.HEAL, pos.x, pos.y, 1.0)
 	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.HEAL, pos.x, pos.y))
 
 func _spawn_hit_burst(pos: Vector2) -> void:
+	if mp == 1:
+		netplay.fx_spawn.rpc(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y, 1.0)
 	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y))
 	for i in 8:
 		var p := ParticleFx.new()

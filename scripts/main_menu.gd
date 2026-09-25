@@ -8,6 +8,7 @@ signal play_pressed
 signal shop_pressed
 signal settings_pressed
 signal exit_pressed
+signal multi_pressed
 
 var essence := 0
 var _tick := 0.0
@@ -69,9 +70,10 @@ func build(bank: int) -> void:
 	center.add_child(opts)
 
 	_add_opt(opts, "⚔  Jogar  ✧", 0)
-	_add_opt(opts, "◆  Loja  ✧", 1)
-	_add_opt(opts, "⚙  Configurações  ✧", 2)
-	_add_opt(opts, "✕  Sair  ✧", 3)
+	_add_opt(opts, "👥  Multiplayer  ✧", 1)
+	_add_opt(opts, "◆  Loja  ✧", 2)
+	_add_opt(opts, "⚙  Configurações  ✧", 3)
+	_add_opt(opts, "✕  Sair  ✧", 4)
 
 	var ess_row := HBoxContainer.new()
 	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -136,8 +138,9 @@ func _refresh() -> void:
 func _activate(i: int) -> void:
 	match i:
 		0: play_pressed.emit()
-		1: shop_pressed.emit()
-		2: settings_pressed.emit()
+		1: multi_pressed.emit()
+		2: shop_pressed.emit()
+		3: settings_pressed.emit()
 		_: exit_pressed.emit()
 
 func _process(_delta: float) -> void:
