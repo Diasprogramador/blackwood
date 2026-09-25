@@ -10,6 +10,8 @@ var _life := 20.0
 var _t := 0.0
 var _collected := false
 var _player: Player
+## Client multiplayer: só renderiza (posição vem do host).
+var frozen := false
 
 signal collected(amount: int)
 
@@ -35,6 +37,10 @@ func setup(amount: int, from_pos: Vector2, player: Player) -> void:
 
 func _process(delta: float) -> void:
 	if _collected:
+		return
+	if frozen:
+		_t += delta
+		queue_redraw()
 		return
 	_t += delta
 	queue_redraw()

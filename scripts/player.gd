@@ -76,6 +76,9 @@ const TRAIL_LIFE := 0.35
 
 var world: World
 var controlled := true
+## Multiplayer: host dirige o P2 com inputs da rede (ignora o teclado local).
+var use_ext := false
+var ext_dir := Vector2.ZERO
 ## Teclas da run (foto do GameSettings feita no setup; no menu não muda).
 var bind: Dictionary = {}
 
@@ -260,10 +263,13 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var dir := Vector2.ZERO
-	if _held("move_up"): dir.y -= 1
-	if _held("move_down"): dir.y += 1
-	if _held("move_left"): dir.x -= 1
-	if _held("move_right"): dir.x += 1
+	if use_ext:
+		dir = ext_dir
+	else:
+		if _held("move_up"): dir.y -= 1
+		if _held("move_down"): dir.y += 1
+		if _held("move_left"): dir.x -= 1
+		if _held("move_right"): dir.x += 1
 
 	var pushing := dir != Vector2.ZERO
 	if pushing:

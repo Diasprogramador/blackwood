@@ -531,15 +531,17 @@ func _mp_peer_joined(_id: int) -> void:
 
 func _mp_peer_left(_id: int) -> void:
 	if mp == 1:
+		mp_ally_ready = false
 		if state == State.PLAY and player2 != null:
 			if is_instance_valid(player2):
 				player2.queue_free()
 			player2 = null
-			mp_ally_ready = false
 			say("Amigo desconectou — run solo agora.")
 		elif state == State.MULTI:
-			mp_ally_ready = false
 			mult_ui.set_status("Amigo saiu.")
+		elif state == State.STAGE:
+			stage_ui._refresh()
+			_stage_ally_line()
 	elif mp == 2:
 		_enter_menu()
 
@@ -585,6 +587,15 @@ func _on_stage_start(stage_idx: int, diff_idx: int) -> void:
 	start_game(_selected, stage_idx, diff_idx)
 
 func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, seed_value: int = -1, ally_idx: int = -1) -> void:
+	# Client reiniciando vira solo; host reiniciando reabre a dupla.
+	if mp == 2:
+		netplay.leave()
+		mp = 0
+	if mp == 1 and mp_armed and ally_idx < 0 and netplay.has_ally() and mp_ally_ready:
+		ally_idx = mp_ally_champ
+		seed_value = randi()
+		mp_seed = seed_value
+		netplay.begin.rpc(mp_seed, cur_stage, cur_diff, _selected)
 	# R do gameover/vitória repete a mesma combinação.
 	if champ_idx < 0:
 		champ_idx = _selected
@@ -678,6 +689,14 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 func _start_wave(idx: int) -> void:
 	wave_idx = idx
 	wave_quota = StageData.wave_quota(cur_stage, idx, cur_diff)
+	if player2 != null and is_instance_valid(player2):
+		wave_quota = int(wave_quota * 1.5)  # dupla encara mais bicho
+	# Co-op: caídos revivem a cada onda com metade da vida.
+	for pl in [player, player2]:
+		if pl != null and is_instance_valid(pl) and not pl.is_alive():
+			pl.hp = maxi(1, int(pl.max_hp * 0.5))
+			pl.mana = pl.max_mana
+			say("%s reviveu! (50%%)" % pl.champ_name)
 	wave_spawned = 0
 	wave_killed = 0
 	wave_active = true
@@ -717,11 +736,14 @@ func _wave_level() -> int:
 
 func _diff_mults() -> Dictionary:
 	var dd: Dictionary = StageData.DIFFS[clampi(cur_diff, 0, StageData.DIFFS.size() - 1)]
-	return {
+	var m := {
 		"hp": float(dd.get("hp", 1.0)), "atk": float(dd.get("atk", 1.0)),
 		"df": float(dd.get("df", 1.0)), "gold": float(dd.get("gold", 1.0)),
 		"exp": float(dd.get("exp", 1.0)), "speed": float(dd.get("speed", 1.0)),
 	}
+	if player2 != null and is_instance_valid(player2):
+		m["hp"] = float(m["hp"]) * 1.2  # dupla: bicho mais tankudo
+	return m
 
 func _clear_world() -> void:
 	for e in enemies:
@@ -751,6 +773,15 @@ func _clear_world() -> void:
 func _on_player_died() -> void:
 	if state == State.GAMEOVER or state == State.VICTORY:
 		return
+	if mp == 2:
+		return  # host decide; chega via force_state
+	if mp == 1:
+		var p1_up := player != null and is_instance_valid(player) and player.is_alive()
+		var p2_up := player2 != null and is_instance_valid(player2) and player2.is_alive()
+		if p1_up or p2_up:
+			say("Um campeão caiu! Revive na próxima onda.")
+			return
+		netplay.force_state.rpc(0)
 	state = State.GAMEOVER
 	var gw := StageData.global_wave(cur_stage, wave_idx)
 	var kills_lbl: Label = _find_label(gameover_layer, "Kills")
@@ -786,6 +817,8 @@ func _on_victory() -> void:
 	victory_layer.visible = true
 	add_shake(8.0)
 	Sfx.play(self, "victory")
+	if mp == 1:
+		netplay.force_state.rpc(1)
 
 func _find_label(root: Node, name: String) -> Label:
 	if root.name == name and root is Label:
@@ -804,7 +837,11 @@ func _physics_process(delta: float) -> void:
 		return
 	if player == null or not is_instance_valid(player):
 		return
+	if mp == 2:
+		_client_play_tick(delta)
+		return
 	game_time += delta
+	_apply_ally_input()
 
 	# ---- Lógica de waves ----
 	var alive := 0
@@ -842,20 +879,24 @@ func _physics_process(delta: float) -> void:
 			if between_timer <= 0.0:
 				_start_wave(wave_idx + 1)
 
-	# IA + ataques dos inimigos
+	# IA + ataques dos inimigos (alvo = vivo mais próximo)
 	for e in enemies:
 		if not is_instance_valid(e):
 			continue
 		if e.is_alive():
-			e.ai_update(player, delta)
-			if e.try_attack(player):
+			var tgt := _nearest_alive(e.position)
+			if tgt == null:
+				continue
+			e.ai_update(tgt, delta)
+			if e.try_attack(tgt):
 				fx_layer.add_child(AttackEffect.new(
-					AttackEffect.Type.ENEMY_HIT, player.position.x, player.position.y))
+					AttackEffect.Type.ENEMY_HIT, tgt.position.x, tgt.position.y))
 				add_shake(2.0)
 				hud.queue_redraw()
 		elif e.death_timer >= 0.0:
 			# Cadáver com fade: continua atualizando o sumiço suave.
-			e.ai_update(player, delta)
+			var tgt2 := _nearest_alive(e.position)
+			e.ai_update(tgt2 if tgt2 != null else player, delta)
 
 	# Separação: ninguém empilha em cima de ninguém (cada um guarda seu espaço).
 	var bodies := []
@@ -898,7 +939,7 @@ func _physics_process(delta: float) -> void:
 			shots.remove_at(si)
 		si -= 1
 
-	camera.position = player.position if player else camera.position
+	camera.position = _camera_focus()
 
 	# screen shake (críticos, mortes, elites)
 	if shake > 0.0:
@@ -909,6 +950,344 @@ func _physics_process(delta: float) -> void:
 
 	# regenera HUD suavemente
 	hud.queue_redraw()
+
+	if mp == 1:
+		_host_net_tick(delta)
+
+## Vivo mais próximo (co-op) ou o jogador.
+func _nearest_alive(pos: Vector2):
+	var best = null
+	var best_d := INF
+	for pl in [player, player2]:
+		if pl == null or not is_instance_valid(pl):
+			continue
+		if not pl.is_alive():
+			continue
+		var dd := pos.distance_to(pl.position)
+		if dd < best_d:
+			best_d = dd
+			best = pl
+	return best
+
+func _camera_focus() -> Vector2:
+	var a := player != null and is_instance_valid(player) and player.is_alive()
+	var b := player2 != null and is_instance_valid(player2) and player2.is_alive()
+	if a and b:
+		return (player.position + player2.position) * 0.5
+	if b:
+		return player2.position
+	if a:
+		return player.position
+	return camera.position
+
+# =====================================================================
+#  MULTIPLAYER EM JOGO (host simula, client renderiza)
+# =====================================================================
+func _apply_ally_input() -> void:
+	if player2 == null or not is_instance_valid(player2) or not player2.is_alive():
+		return
+	var mv: Vector2 = net_in.get("move", Vector2.ZERO)
+	player2.ext_dir = mv.limit_length(1.0) if mv.length() > 1.0 else mv
+	if bool(net_in.get("atk", false)):
+		_do_basic_attack(player2)
+	var sk: Array = net_in.get("sk", [])
+	for i in mini(5, sk.size()):
+		if bool(sk[i]):
+			_do_cast(i, player2)
+	if bool(net_in.get("channel", false)):
+		_toggle_channel(player2)
+	if bool(net_in.get("item", false)):
+		_use_first_item(player2)
+	net_in.atk = false
+	net_in.sk = [false, false, false, false, false]
+	net_in.channel = false
+	net_in.item = false
+
+func mp_on_input(move: Vector2, atk: bool, sk: Array, channel: bool, item: bool) -> void:
+	net_in.move = move
+	if atk:
+		net_in.atk = true
+	var cur: Array = net_in.sk
+	for i in mini(5, (sk as Array).size()):
+		if bool(sk[i]):
+			cur[i] = true
+	if channel:
+		net_in.channel = true
+	if item:
+		net_in.item = true
+
+func _pack_player(pl) -> Array:
+	if pl == null or not is_instance_valid(pl):
+		return []
+	return [pl.position, pl.hp, pl.max_hp, float(pl.mana), pl.max_mana, pl.level,
+		pl.xp, pl.gold, pl.facing, pl.moving, pl.walk_phase, pl.channeling,
+		pl.is_alive(), pl.attack_cd, pl.champ_name, pl.role]
+
+func _pack_enemies() -> Array:
+	var out := []
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		out.append([e.net_id, e.type_key, e.level, e.position, e.hp, e.max_hp,
+			e.facing, e.moving, e.walk_phase, e.is_alive(), e.death_timer,
+			e.is_boss(), e.is_miniboss(), e.is_elite])
+	return out
+
+func _pack_coins() -> Array:
+	var out := []
+	for c in coin_layer.get_children():
+		if c is GoldCoin and is_instance_valid(c):
+			out.append([(c as Node2D).position.x, (c as Node2D).position.y, (c as GoldCoin).value])
+	return out
+
+func _pack_wave() -> Array:
+	return [cur_stage, cur_diff, wave_idx, wave_quota, wave_killed, wave_active,
+		game_time, kill_count, StageData.essence(progress), between_timer, msg_seq, msg_last]
+
+func _host_net_tick(delta: float) -> void:
+	snap_t += delta
+	if snap_t >= 0.05:
+		snap_t = 0.0
+		netplay.snap_players.rpc(_pack_player(player), _pack_player(player2))
+	esnap_t += delta
+	if esnap_t >= 0.08:
+		esnap_t = 0.0
+		netplay.snap_enemies.rpc(_pack_enemies())
+		netplay.snap_coins.rpc(_pack_coins())
+	wsnap_t += delta
+	if wsnap_t >= 0.2:
+		wsnap_t = 0.0
+		netplay.snap_wave.rpc(_pack_wave())
+
+func _client_play_tick(delta: float) -> void:
+	for e in enemies:
+		if is_instance_valid(e):
+			e.client_tick(delta)
+	for sh in shots.duplicate():
+		if is_instance_valid(sh):
+			sh.shot_tick(delta)
+	var si := shots.size() - 1
+	while si >= 0:
+		if not is_instance_valid(shots[si]):
+			shots.remove_at(si)
+		si -= 1
+	camera.position = _camera_focus()
+	if shake > 0.0:
+		shake = maxf(0.0, shake - 60.0 * delta)
+		camera.offset = Vector2(randf_range(-shake, shake), randf_range(-shake, shake))
+	else:
+		camera.offset = Vector2.ZERO
+	_send_input_tick(delta)
+	hud.queue_redraw()
+
+func _send_input_tick(delta: float) -> void:
+	input_t += delta
+	if input_t < 1.0 / 30.0:
+		return
+	input_t = 0.0
+	if player == null or not player.is_alive():
+		return
+	var mv := Vector2.ZERO
+	if GameSettings.held(settings, "move_up"): mv.y -= 1.0
+	if GameSettings.held(settings, "move_down"): mv.y += 1.0
+	if GameSettings.held(settings, "move_left"): mv.x -= 1.0
+	if GameSettings.held(settings, "move_right"): mv.x += 1.0
+	if mv.length() > 1.0:
+		mv = mv.normalized()
+	var sk := []
+	for i in 5:
+		sk.append(_edge("skill%d" % (i + 1)))
+	netplay.send_input(mv, _edge("attack"), sk, _edge("channel"), _edge("item"))
+
+func _edge(action_id: String) -> bool:
+	var keys: Dictionary = settings.get("keys", {})
+	var now := false
+	if keys.has(action_id):
+		for code in (keys[action_id] as Array):
+			if Input.is_physical_key_pressed(int(code)):
+				now = true
+				break
+	var was := bool(mp_prev.get(action_id, false))
+	mp_prev[action_id] = now
+	return now and not was
+
+func mp_apply_players(a: Array, b: Array) -> void:
+	_apply_psnap(player, a)
+	_apply_psnap(player2, b)
+
+func _apply_psnap(pl, arr: Array) -> void:
+	if pl == null or not is_instance_valid(pl) or arr.size() < 16:
+		return
+	var before: Vector2 = pl.position
+	pl.position = arr[0]
+	pl.hp = int(arr[1])
+	pl.max_hp = int(arr[2])
+	pl.mana = float(arr[3])
+	pl.max_mana = int(arr[4])
+	pl.level = int(arr[5])
+	pl.xp = int(arr[6])
+	pl.gold = int(arr[7])
+	pl.facing = int(arr[8])
+	pl.moving = bool(arr[9])
+	pl.walk_phase = float(arr[10])
+	pl.channeling = bool(arr[11])
+	pl.attack_cd = float(arr[13])
+	pl.queue_redraw()
+	if before.distance_to(pl.position) > 2.0 and pl.is_alive():
+		pl.trail.append({ p = pl.position, life = Player.TRAIL_LIFE })
+	var ti := pl.trail.size() - 1
+	while ti >= 0:
+		pl.trail[ti].life -= 0.08
+		if pl.trail[ti].life <= 0.0:
+			pl.trail.remove_at(ti)
+		ti -= 1
+	while pl.trail.size() > Player.TRAIL_N:
+		pl.trail.pop_front()
+
+func mp_apply_enemies(list: Array) -> void:
+	var seen := {}
+	for item in list:
+		if not (item is Array) or (item as Array).size() < 14:
+			continue
+		var arr: Array = item
+		var nid := int(arr[0])
+		seen[nid] = true
+		var e = mp_foes.get(nid, null)
+		if e == null or not is_instance_valid(e):
+			e = EnemyScript.new()
+			e.net_id = nid
+			e.world = world
+			e.stage_idx = cur_stage
+			e.setup(str(arr[1]), int(arr[2]))
+			entities.add_child(e)
+			enemies.append(e)
+			mp_foes[nid] = e
+		e.position = arr[3]
+		e.hp = int(arr[4])
+		e.max_hp = int(arr[5])
+		e.facing = int(arr[6])
+		e.moving = bool(arr[7])
+		e.walk_phase = float(arr[8])
+		e.death_timer = float(arr[10])
+		e.is_boss_flag = bool(arr[11])
+		e.is_miniboss_flag = bool(arr[12])
+		e.is_elite = bool(arr[13])
+		e.dead = not bool(arr[9])
+		e.queue_redraw()
+	for nid in mp_foes.keys():
+		if not seen.has(nid):
+			var old = mp_foes[nid]
+			if is_instance_valid(old):
+				old.queue_free()
+				enemies.erase(old)
+			mp_foes.erase(nid)
+
+func mp_apply_coins(list: Array) -> void:
+	var nodes := []
+	for c in coin_layer.get_children():
+		if c is GoldCoin and is_instance_valid(c):
+			nodes.append(c)
+	var used := {}
+	for item in list:
+		if not (item is Array) or (item as Array).size() < 3:
+			continue
+		var arr: Array = item
+		var pos := Vector2(float(arr[0]), float(arr[1]))
+		var best = null
+		var best_d := 40.0
+		for idx in nodes.size():
+			if used.has(idx):
+				continue
+			var dd: float = (nodes[idx] as Node2D).position.distance_to(pos)
+			if dd < best_d:
+				best_d = dd
+				best = idx
+		if best == null:
+			var coin = CoinScript.new()
+			coin_layer.add_child(coin)
+			coin.setup(1, pos, null)
+			coin.frozen = true
+			coin.value = int(arr[2])
+			coin.position = pos
+		else:
+			used[best] = true
+			(nodes[best] as Node2D).position = pos
+			(nodes[best] as GoldCoin).value = int(arr[2])
+	for idx in nodes.size():
+		if not used.has(idx):
+			(nodes[idx] as Node2D).queue_free()
+
+func mp_apply_wave(arr: Array) -> void:
+	if arr.size() < 12:
+		return
+	cur_stage = int(arr[0])
+	cur_diff = int(arr[1])
+	wave_idx = int(arr[2])
+	wave_quota = int(arr[3])
+	wave_killed = int(arr[4])
+	wave_active = bool(arr[5])
+	game_time = float(arr[6])
+	kill_count = int(arr[7])
+	progress["essence"] = int(arr[8])
+	between_timer = float(arr[9])
+	var seq := int(arr[10])
+	if seq > msg_seen:
+		msg_seen = seq
+		say(str(arr[11]))
+
+func mp_apply_shot(from: Vector2, dir: Vector2, speed: float, dmg: int, col: Color) -> void:
+	var shot := Projectile.new()
+	fx_layer.add_child(shot)
+	shot.setup(from, dir, speed, dmg, col, world, player)
+	shot.harmless = true
+	shots.append(shot)
+	Sfx.play(self, "shoot", -10.0)
+
+func mp_apply_fx(fx_type: int, x: float, y: float, s: float) -> void:
+	fx_layer.add_child(AttackEffect.new(fx_type, x, y, 0.0, s))
+
+func mp_apply_float(txt: String, x: float, y: float, col: Color, size: int) -> void:
+	_float_text(txt, Vector2(x, y), col, size)
+
+func mp_on_begin(seed_value: int, stage: int, diff: int, host_champ: int) -> void:
+	mp_seed = seed_value
+	start_game(mp_own_champ, stage, diff, seed_value, host_champ)
+
+func mp_on_force_state(s: int) -> void:
+	if s == 0:
+		_show_gameover_client()
+	elif s == 1:
+		_show_victory_client()
+
+func mp_on_to_menu() -> void:
+	_enter_menu()
+
+func _show_gameover_client() -> void:
+	state = State.GAMEOVER
+	_hide_all()
+	var gw := StageData.global_wave(cur_stage, wave_idx)
+	var kills_lbl: Label = _find_label(gameover_layer, "Kills")
+	if kills_lbl:
+		kills_lbl.text = "Inimigos derrotados: %d   •   Onda %d/15" % [kill_count, gw]
+	var lv_lbl := _find_label(gameover_layer, "Level")
+	if lv_lbl and player:
+		lv_lbl.text = "Nível atingido: %d   •   Gold: %d" % [player.level, player.gold]
+	gameover_layer.visible = true
+	Sfx.play(self, "defeat")
+
+func _show_victory_client() -> void:
+	state = State.VICTORY
+	_hide_all()
+	var info_lbl := _find_label(victory_layer, "Info")
+	if info_lbl and player:
+		info_lbl.text = "%s zerou %s no %s!\nKills: %d   •   Nível: %d   •   Gold: %d\nTempo: %02d:%02d" % [
+			player.champ_name, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff),
+			kill_count, player.level, player.gold, int(game_time / 60.0), int(game_time) % 60]
+	var unl_lbl := _find_label(victory_layer, "Unlocks")
+	if unl_lbl:
+		unl_lbl.text = "Progresso salvo no host!"
+	victory_layer.visible = true
+	Sfx.play(self, "victory")
 
 # =====================================================================
 #  INPUT
@@ -943,7 +1322,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			State.GAMEOVER, State.VICTORY:
 				if key == KEY_ENTER or key == KEY_KP_ENTER:
 					_enter_menu()
-				elif key == KEY_R:
+				elif key == KEY_R and mp != 2:
 					start_game()
 				get_viewport().set_input_as_handled()
 			State.SHOP:
@@ -959,12 +1338,21 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			State.PLAY:
 				if shop.visible:
+					# Loja aberta no multiplayer: teclas vão para ela, sem lutar.
+					shop.handle_key(key)
+					if key == KEY_TAB or key == KEY_ESCAPE \
+							or GameSettings.match_key(settings, "shop", key):
+						_close_shop()
+					get_viewport().set_input_as_handled()
 					return
 				if GameSettings.match_key(settings, "shop", key):
 					_open_shop()
 					get_viewport().set_input_as_handled()
 				elif GameSettings.match_key(settings, "pause", key) or key == KEY_ESCAPE:
-					_set_pause(true)
+					if mp != 0:
+						say("Sem pausa no multiplayer!")
+					else:
+						_set_pause(true)
 					get_viewport().set_input_as_handled()
 				elif GameSettings.match_key(settings, "attack", key):
 					_do_basic_attack()
@@ -988,41 +1376,56 @@ func _open_shop() -> void:
 	if player and player.channeling:
 		player.channeling = false
 	Sfx.play(self, "click")
+	if mp != 0:
+		# No multiplayer o jogo continua rolando (sem pausa).
+		shop.open()
+		say("Loja aberta — o jogo continua! TAB fecha.")
+		return
 	state = State.SHOP
 	shop.open()
 
 func _close_shop() -> void:
 	shop.close()
-	state = State.PLAY
+	if mp == 0:
+		state = State.PLAY
 
 func _set_pause(v: bool) -> void:
 	pause_layer.visible = v
 	state = State.PAUSE if v else State.PLAY
+	if mp == 1:
+		say("⏸ Host pausou." if v else "▶ Host continuou!")
+		_host_net_tick(999.0)
 
-func _toggle_channel() -> void:
-	if player == null:
+func _toggle_channel(pl: Player = null) -> void:
+	if mp == 2 and pl == null:
 		return
-	var started := player.toggle_channel()
+	var q := pl if pl != null else player
+	if q == null:
+		return
+	var started := q.toggle_channel()
 	if started:
 		say("Canalizando mana... (fique parado!) Pressione E para sair.")
-	elif player.channeling == false and player.mana >= player.max_mana:
+	elif q.channeling == false and q.mana >= q.max_mana:
 		say("Mana já está cheia!")
 	else:
 		say("Canalização cancelada.")
-	player.queue_redraw()
+	q.queue_redraw()
 
-func _do_basic_attack() -> void:
-	if player == null:
+func _do_basic_attack(pl: Player = null) -> void:
+	if mp == 2 and pl == null:
 		return
-	var result = player.basic_attack(enemies)
+	var q := pl if pl != null else player
+	if q == null:
+		return
+	var result = q.basic_attack(enemies)
 	if result == null:
-		if player.attack_cd <= 0.0 and not player.channeling:
-			say("Nenhum alvo no alcance! (%dpx)" % player.attack_range)
+		if q.attack_cd <= 0.0 and not q.channeling:
+			say("Nenhum alvo no alcance! (%dpx)" % q.attack_range)
 		return
 	var target = result.target
 	var pos: Vector2 = target.position
 	# Efeito do personagem + estrela de critico por cima (antes: slash generico).
-	_spawn_role_fx(pos, SkillIcon.basic_effect_for(player.role), 0.85)
+	_spawn_role_fx(pos, SkillIcon.basic_effect_for(q.role), 0.85)
 	if result.crit:
 		_spawn_role_fx(pos, AttackEffect.Type.CRIT, 1.0)
 		add_shake(6.0)
@@ -1032,75 +1435,123 @@ func _do_basic_attack() -> void:
 	if not target.is_alive():
 		_on_enemy_killed(target)
 
-func _do_cast(index: int) -> void:
-	if player == null:
+func _do_cast(index: int, pl: Player = null) -> void:
+	if mp == 2 and pl == null:
 		return
-	if index >= player.skills.size():
+	var q := pl if pl != null else player
+	if q == null:
+		return
+	if index >= q.skills.size():
 		say("Slot %d bloqueado — desbloqueie skills no menu (◆)!" % (index + 1))
 		return
-	var result: Dictionary = player.cast_skill(index, enemies)
+	var result: Dictionary = q.cast_skill(index, enemies)
 	if not result.get("ok", false):
 		say(result.get("reason", "Sem mana / em cooldown!"))
 		return
 	if result.kind == "heal":
-		_spawn_heal(player.position)
-		_spawn_skill_vfx(player.role, _slot_vfx(index), player.position, index >= 4)
-		_float_text("+%d" % result.amount, player.position + Vector2(0, -36),
+		_spawn_heal(q.position)
+		_spawn_skill_vfx(q.role, _slot_vfx(index), q.position, index >= 4)
+		_float_text("+%d" % result.amount, q.position + Vector2(0, -36),
 			Color(0.4, 1, 0.5), 14)
 		return
 	var target = result.target
 	# Efeito do personagem (antes: burst generico por kind). Ultimate maior.
-	var fx_type: int = SkillIcon.effect_for(player.role, str(result.kind), index)
+	var fx_type: int = SkillIcon.effect_for(q.role, str(result.kind), index)
 	_spawn_role_fx(target.position, fx_type, 1.25 if index >= 4 else 1.0)
-	_spawn_skill_vfx(player.role, _slot_vfx(index), target.position, index >= 4)
+	_spawn_skill_vfx(q.role, _slot_vfx(index), target.position, index >= 4)
 	add_shake(3.0)
 	if index >= 4:
 		add_shake(5.0)
 	_float_text(str(result.dmg), target.position + Vector2(0, -30), Color(0.5, 0.9, 1), 14)
-	say("%s %s! −%d" % [SkillIcon.glyph(player.role, str(result.kind), index), result.name, result.dmg])
+	say("%s %s! −%d" % [SkillIcon.glyph(q.role, str(result.kind), index), result.name, result.dmg])
 	if not target.is_alive():
 		_on_enemy_killed(target)
 
-func try_buy_upgrade(idx: int) -> void:
-	if player == null:
+func try_buy_upgrade(idx: int, pl: Player = null) -> void:
+	if mp == 2 and pl == null:
+		netplay.send_buy_upgrade(idx)
 		return
-	if player.buy_upgrade(idx):
+	var q := pl if pl != null else player
+	if q == null:
+		return
+	if idx < 0 or idx >= ChampData.UPGRADE_DESCS.size():
+		return
+	if q.buy_upgrade(idx):
 		say("Comprado: %s" % ChampData.UPGRADE_DESCS[idx])
 		Sfx.play(self, "buy")
-		_spawn_heal(player.position)
+		_spawn_heal(q.position)
 	else:
 		say("Gold insuficiente!")
 		Sfx.play(self, "error")
 
-func _use_first_item() -> void:
-	if player == null or player.inventory.is_empty():
+func _use_first_item(pl: Player = null) -> void:
+	if mp == 2 and pl == null:
+		return
+	var q := pl if pl != null else player
+	if q == null or q.inventory.is_empty():
 		say("Inventário vazio! Compre itens na loja (TAB).")
 		return
 	# usa o primeiro consumível (equip vai para equipar via loja/inventário)
 	var used := false
-	for i in player.inventory.size():
-		var item: Item = player.inventory[i]
+	for i in q.inventory.size():
+		var item: Item = q.inventory[i]
 		if item is Equipment:
 			continue
-		if player.use_item(i):
+		if q.use_item(i):
 			say("Usou: %s" % item.name)
 			Sfx.play(self, "potion")
-			_spawn_heal(player.position)
-			_float_text(item.name, player.position + Vector2(0, -40),
+			_spawn_heal(q.position)
+			_float_text(item.name, q.position + Vector2(0, -40),
 				Color(0.5, 0.9, 1), 13)
 			used = true
 			break
 	if not used:
 		# só equipamentos — equipa o primeiro
-		if player.equip_item(0):
+		if q.equip_item(0):
 			var eq_name := "item"
-			if player.weapon:
-				eq_name = player.weapon.name
-			elif player.armor:
-				eq_name = player.armor.name
+			if q.weapon:
+				eq_name = q.weapon.name
+			elif q.armor:
+				eq_name = q.armor.name
 			say("Equipou: %s" % eq_name)
 		else:
 			say("Nada para usar agora.")
+
+## Loja da run: client pede, host aplica. Idas vindas da shop_ui.
+func mp_buy_item(idx: int) -> void:
+	if mp == 2:
+		netplay.send_buy_item(idx)
+		return
+
+func _clone_shop_item(template: Item) -> Item:
+	if template is HealthPotion:
+		return HealthPotion.new(template.type, template.heal_amount)
+	elif template is ManaPotion:
+		return ManaPotion.new(template.type, template.mana_amount)
+	elif template is Elixir:
+		return Elixir.new(template.type, template.hp_restore, template.mp_restore)
+	elif template is Equipment:
+		return Equipment.new(template.type, template.stat_type, template.bonus_value)
+	return null
+
+func mp_on_buy_upgrade(idx: int) -> void:
+	if player2 != null and is_instance_valid(player2):
+		try_buy_upgrade(idx, player2)
+
+func mp_on_buy_item(idx: int) -> void:
+	if player2 == null or not is_instance_valid(player2):
+		return
+	if shop._shop_items == null or idx < 0 or idx >= shop._shop_items.size():
+		return
+	var clone := _clone_shop_item(shop._shop_items[idx])
+	if clone == null:
+		return
+	if player2.buy_item(clone):
+		say("P2 comprou: %s" % clone.name)
+		Sfx.play(self, "buy")
+	else:
+		say("P2 sem gold!")
+		Sfx.play(self, "error")
 
 # =====================================================================
 #  MORTE DE INIMIGO → GOLD DROP + PROGRESSO DA ONDA
@@ -1110,6 +1561,8 @@ func _on_enemy_killed(e) -> void:
 	wave_killed += 1
 	if player:
 		player.gain_exp(e.exp_reward)
+	if player2 != null and is_instance_valid(player2):
+		player2.gain_exp(e.exp_reward)
 	_spawn_hit_burst(e.position)
 	# chefões balançam muito a tela
 	if e.is_boss():
@@ -1135,12 +1588,15 @@ func _on_enemy_killed(e) -> void:
 			continue
 		var coin = CoinScript.new()
 		coin_layer.add_child(coin)
-		coin.setup(v, e.position, player)
+		var tp := _nearest_alive(e.position)
+		if tp == null:
+			tp = player
+		coin.setup(v, e.position, tp)
 		coin.collected.connect(func(amount):
-			if player:
-				player.add_gold(amount)
+			if tp != null and is_instance_valid(tp):
+				tp.add_gold(amount)
 				Sfx.play(self, "coin", -4.0)
-				_float_text("+%d ⬤" % amount, player.position + Vector2(0, -40),
+				_float_text("+%d ⬤" % amount, tp.position + Vector2(0, -40),
 					Color(1, 0.85, 0.25), 13)
 		)
 	# EXP flutuante
@@ -1192,6 +1648,8 @@ func _spawn_boss() -> void:
 	var lvl := maxi(2, _wave_level() + 1)
 	var e = EnemyScript.new()
 	e.name = "Boss"
+	e.net_id = net_id_counter
+	net_id_counter += 1
 	e.world = world
 	e.stage_idx = cur_stage
 	e.setup(StageData.boss_type(cur_stage), lvl, m)
@@ -1225,6 +1683,8 @@ func _spawn_miniboss() -> void:
 	var pool := ["GOLEM", "JUNGLE"]
 	var e = EnemyScript.new()
 	e.name = "MiniBoss"
+	e.net_id = net_id_counter
+	net_id_counter += 1
 	e.world = world
 	e.stage_idx = cur_stage
 	e.setup(pool[randi() % pool.size()], lvl, m)
@@ -1251,6 +1711,8 @@ func _spawn_minion(force_elite: bool = false) -> void:
 	var lvl := _wave_level()
 	var e = EnemyScript.new()
 	e.name = "Enemy"
+	e.net_id = net_id_counter
+	net_id_counter += 1
 	e.world = world
 	e.stage_idx = cur_stage
 	e.setup(EnemyData.random_type(lvl), lvl, m)
@@ -1359,10 +1821,14 @@ func _spark_color() -> Color:
 ## Inimigo ranged atirou: cria o projétil (dragão-boss cospe 3).
 func _on_enemy_shoot(e) -> void:
 	if player == null or not is_instance_valid(player) or not player.is_alive():
-		return
+		if player2 == null or not is_instance_valid(player2) or not player2.is_alive():
+			return
 	if not is_instance_valid(e):
 		return
-	var base_dir: Vector2 = (player.position - e.position).normalized()
+	var tgt := _nearest_alive(e.position)
+	if tgt == null:
+		return
+	var base_dir: Vector2 = (tgt.position - e.position).normalized()
 	var n := 3 if (e.type_key == "DRAGON" and e.is_boss()) else 1
 	for i in n:
 		var ang := 0.0
@@ -1377,9 +1843,13 @@ func _on_enemy_shoot(e) -> void:
 	Sfx.play(self, "shoot", -6.0)
 
 func _on_shot_hit(proj) -> void:
-	if player != null and is_instance_valid(player) and player.is_alive():
-		player.take_damage(proj.damage)
-		fx_layer.add_child(AttackEffect.new(
-			AttackEffect.Type.ENEMY_HIT, player.position.x, player.position.y))
-		add_shake(2.0)
-		hud.queue_redraw()
+	if mp == 2:
+		return  # dano é autoridade do host
+	var tgt := _nearest_alive(proj.position)
+	if tgt == null:
+		return
+	tgt.take_damage(proj.damage)
+	fx_layer.add_child(AttackEffect.new(
+		AttackEffect.Type.ENEMY_HIT, tgt.position.x, tgt.position.y))
+	add_shake(2.0)
+	hud.queue_redraw()

@@ -337,19 +337,12 @@ func _on_buy(idx: int) -> void:
 func _on_buy_item(idx: int) -> void:
 	if main == null or main.player == null:
 		return
+	if main.mp == 2:
+		main.mp_buy_item(idx)
+		return
 	var p: Player = main.player
-	var template: Item = _shop_items[idx]
-	# clona o item para o inventário
-	var clone: Item
-	if template is HealthPotion:
-		clone = HealthPotion.new(template.type, template.heal_amount)
-	elif template is ManaPotion:
-		clone = ManaPotion.new(template.type, template.mana_amount)
-	elif template is Elixir:
-		clone = Elixir.new(template.type, template.hp_restore, template.mp_restore)
-	elif template is Equipment:
-		clone = Equipment.new(template.type, template.stat_type, template.bonus_value)
-	else:
+	var clone := main._clone_shop_item(_shop_items[idx])
+	if clone == null:
 		return
 	if p.buy_item(clone):
 		main.hud.add_message("Comprado: %s" % clone.name)

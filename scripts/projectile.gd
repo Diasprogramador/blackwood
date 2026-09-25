@@ -13,6 +13,7 @@ var life := 2.5
 var col := Color(1, 0.5, 0.2)
 var world: World
 var dead := false
+var harmless := false  # client: voa visual, sem dano (host decide)
 var tick := 0.0
 var trail: Array = []
 
@@ -45,7 +46,7 @@ func shot_tick(d: float) -> void:
 		_fizzle()
 		return
 	if _player != null and is_instance_valid(_player) and _player.is_alive():
-		if position.distance_to(_player.position) < radius + 10.0:
+		if not harmless and position.distance_to(_player.position) < radius + 10.0:
 			dead = true
 			hit_player.emit(self)
 			queue_free()

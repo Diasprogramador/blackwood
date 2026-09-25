@@ -10,6 +10,7 @@ signal shoot(enemy: Enemy)
 static var A = ArtUtil
 
 const DEATH_TIME := 1.6
+var net_id := -1  # multiplayer: id estável do spawn (host)
 
 var type_key := "MINION"
 var type_name := "Minion"
@@ -350,6 +351,22 @@ func take_damage(raw: int) -> int:
 
 func _process(_delta: float) -> void:
 	pass
+
+## Client multiplayer: só anima (posição/HP vêm do host).
+func client_tick(delta: float) -> void:
+	if dead:
+		if death_timer >= 0.0:
+			death_timer -= delta
+			var a := clampf(death_timer / DEATH_TIME, 0.0, 1.0)
+			modulate = Color(1, 1, 1, a)
+			position.y += 8.0 * delta
+			queue_redraw()
+		return
+	walk_phase += (6.0 if moving else 0.5) * delta
+	if hit_flash > 0:
+		hit_flash -= 1
+	if moving or hit_flash > 0:
+		queue_redraw()
 
 func _draw() -> void:
 	# Sombra no chão (o corpo é o Sprite2D `body`).
