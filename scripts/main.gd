@@ -18,6 +18,7 @@ var world: World
 var player: Player
 var camera: Camera2D
 var enemies: Array = []
+var shots: Array = []  # projéteis inimigos (ticados só em PLAY)
 var kill_count := 0
 var game_time := 0.0
 var minimap_tex: ImageTexture
@@ -537,6 +538,10 @@ func _clear_world() -> void:
 		if is_instance_valid(e):
 			e.queue_free()
 	enemies.clear()
+	for s in shots:
+		if is_instance_valid(s):
+			s.queue_free()
+	shots.clear()
 	for c in coin_layer.get_children():
 		c.queue_free()
 	for c in fx_layer.get_children():
@@ -688,6 +693,16 @@ func _physics_process(delta: float) -> void:
 			e.queue_free()
 			enemies.remove_at(i)
 		i -= 1
+
+	# Projéteis inimigos (só andam em PLAY: ticados aqui, não no _process).
+	for sh in shots.duplicate():
+		if is_instance_valid(sh):
+			sh.shot_tick(delta)
+	var si := shots.size() - 1
+	while si >= 0:
+		if not is_instance_valid(shots[si]):
+			shots.remove_at(si)
+		si -= 1
 
 	camera.position = player.position if player else camera.position
 
@@ -984,6 +999,7 @@ func _spawn_boss() -> void:
 	e.setup(StageData.boss_type(cur_stage), lvl, m)
 	e.position = pos
 	e.died.connect(_on_enemy_killed)
+	e.shoot.connect(_on_enemy_shoot)
 	entities.add_child(e)
 	enemies.append(e)
 	wave_spawned += 1
@@ -1016,6 +1032,7 @@ func _spawn_miniboss() -> void:
 	e.setup(pool[randi() % pool.size()], lvl, m)
 	e.position = pos
 	e.died.connect(_on_enemy_killed)
+	e.shoot.connect(_on_enemy_shoot)
 	entities.add_child(e)
 	enemies.append(e)
 	wave_spawned += 1
@@ -1041,6 +1058,7 @@ func _spawn_minion(force_elite: bool = false) -> void:
 	e.setup(EnemyData.random_type(lvl), lvl, m)
 	e.position = pos
 	e.died.connect(_on_enemy_killed)
+	e.shoot.connect(_on_enemy_shoot)
 	entities.add_child(e)
 	enemies.append(e)
 	wave_spawned += 1
@@ -1124,3 +1142,31 @@ func _spark_color() -> Color:
 	if player == null:
 		return base
 	return base.lerp(SkillIcon.role_color(player.role), 0.45)
+
+## Inimigo ranged atirou: cria o projétil (dragão-boss cospe 3).
+func _on_enemy_shoot(e) -> void:
+	if player == null or not is_instance_valid(player) or not player.is_alive():
+		return
+	if not is_instance_valid(e):
+		return
+	var base_dir: Vector2 = (player.position - e.position).normalized()
+	var n := 3 if (e.type_key == "DRAGON" and e.is_boss()) else 1
+	for i in n:
+		var ang := 0.0
+		if n > 1:
+			ang = (i - 1) * 0.18
+		var shot := Projectile.new()
+		fx_layer.add_child(shot)
+		shot.setup(e.position, base_dir.rotated(ang),
+			280.0 if n > 1 else 250.0, e.calc_damage(), e.bolt_color(), world, player)
+		shot.hit_player.connect(_on_shot_hit)
+		shots.append(shot)
+	Sfx.play(self, "shoot", -6.0)
+
+func _on_shot_hit(proj) -> void:
+	if player != null and is_instance_valid(player) and player.is_alive():
+		player.take_damage(proj.damage)
+		fx_layer.add_child(AttackEffect.new(
+			AttackEffect.Type.ENEMY_HIT, player.position.x, player.position.y))
+		add_shake(2.0)
+		hud.queue_redraw()

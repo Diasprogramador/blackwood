@@ -31,7 +31,7 @@ static func _set_bus_vol(bus: String, v: int) -> void:
 		AudioServer.set_bus_mute(i, false)
 		AudioServer.set_bus_volume_db(i, linear_to_db(clampf(v / 100.0, 0.01, 1.0)))
 
-## Toca um efeito (click, coin, hit, potion, levelup, victory, defeat, buy, error).
+## Toca um efeito (click, coin, hit, potion, levelup, victory, defeat, buy, error, shoot).
 static func play(parent: Node, id: String, vol_db: float = 0.0) -> void:
 	if parent == null:
 		return
@@ -60,6 +60,7 @@ static func _sample(id: String) -> AudioStreamWAV:
 		"defeat": s = _arp([392.0, 330.0, 262.0, 196.0], 0.18, 0.5)
 		"buy": s = _arp([880.0, 1174.0], 0.08, 0.45)
 		"error": s = _sweep(220.0, 160.0, 0.15, 0.5)
+		"shoot": s = _sweep(900.0, 300.0, 0.12, 0.4)
 	if s:
 		_cache[id] = s
 	return s

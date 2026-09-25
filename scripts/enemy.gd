@@ -5,6 +5,7 @@ extends Node2D
 ## combate corpo a corpo e queda de gold ao morrer.
 
 signal died(enemy: Enemy)
+signal shoot(enemy: Enemy)
 
 static var A = ArtUtil
 
@@ -42,6 +43,11 @@ var _side_t := 0.0
 var _detour := Vector2.ZERO
 var _detour_t := 0.0
 var _has_detour := false
+# Ataque à distância (CASTER cerca e fuzila, DRAGÃO cospe fogo).
+const RANGED_TYPES := ["CASTER", "DRAGON"]
+var shoot_cd := 0.0
+var charge_t := 0.0
+var _strafe := 1.0
 # Sprite do kit + cinemática suavizada (sem snaps).
 var body: Sprite2D = null
 var evel := Vector2.ZERO
@@ -84,6 +90,9 @@ func setup(type_key_p: String, lvl: int, mults: Dictionary = {}) -> void:
 	_side_t = 0.0
 	_has_detour = false
 	_detour_t = 0.0
+	shoot_cd = randf_range(1.0, 2.0)
+	charge_t = 0.0
+	_strafe = 1.0 if randf() < 0.5 else -1.0
 	lunge_t = 0.0
 	squash = 0.0
 	lean = 0.0
@@ -119,6 +128,20 @@ func is_boss() -> bool:
 
 func is_miniboss() -> bool:
 	return is_miniboss_flag and not is_boss()
+
+func is_ranged() -> bool:
+	return type_key in RANGED_TYPES
+
+func prefer_range() -> float:
+	return 230.0 if type_key == "DRAGON" else 200.0
+
+func shoot_reach() -> float:
+	return 340.0 if type_key == "DRAGON" else 300.0
+
+func bolt_color() -> Color:
+	if type_key == "DRAGON":
+		return Color(1, 0.45, 0.1)
+	return Color(0.85, 0.4, 1)
 
 ## Procura um ponto livre (não-sólido) para contornar lago/mata fechada.
 ## Guarda em _detour e retorna true se achar.
@@ -164,10 +187,23 @@ func ai_update(player: Player, delta: float) -> void:
 		facing = 1 if to_player.x > 0 else -1
 
 	if moving and world != null:
-		var speed := (1.7 + level * 0.07) * 60.0 * speed_mult  # px/s
+		var spd_mult := 1.0
+		var speed := (1.7 + level * 0.07) * 60.0 * speed_mult * spd_mult  # px/s
 		if d > 420.0:
 			speed *= 1.15  # faro: corre para alcançar a presa distante
 		var dir := to_player.normalized()
+		if is_ranged() and not _has_detour and _side == 0.0 and player.is_alive():
+			var prefer := prefer_range()
+			if d < prefer * 0.7:
+				# Perto demais: recua de lado.
+				dir = (-to_player.normalized() * 0.8 + Vector2(-dir.y, dir.x) * _strafe * 0.5).normalized()
+			elif d > prefer * 1.4:
+				pass  # longe: aproxima normal
+			else:
+				# Na medida: metralha de lado, devagar.
+				dir = (Vector2(-dir.y, dir.x) * _strafe).normalized()
+				spd_mult = 0.45
+		speed *= spd_mult
 		if _has_detour:
 			# Outra rota: vai até o ponto livre e só então volta a caçar.
 			var to_way := _detour - position
@@ -231,6 +267,22 @@ func ai_update(player: Player, delta: float) -> void:
 		_stuck_t = 0.0
 		_side = 0.0
 		_has_detour = false
+
+	# Tiro à distância (independe de estar andando).
+	if not dead and world != null and player != null and is_instance_valid(player) \
+			and is_ranged() and player.is_alive():
+		if shoot_cd > 0.0:
+			shoot_cd -= delta
+		if charge_t > 0.0:
+			charge_t -= delta
+			if charge_t <= 0.0:
+				charge_t = 0.0
+				shoot.emit(self)
+		elif shoot_cd <= 0.0:
+			var dd := position.distance_to(player.position)
+			if dd < shoot_reach() and dd > 50.0:
+				charge_t = 0.5
+				shoot_cd = randf_range(1.6, 2.2) if is_boss() else randf_range(2.0, 2.8)
 
 	_update_body(delta)
 
@@ -302,6 +354,13 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	# Sombra no chão (o corpo é o Sprite2D `body`).
 	ArtUtil.fill_ellipse(self, 0, 8, sh_w, sh_w * 0.32, Color(0, 0, 0, 0.32))
+	# Telegraph do tiro: brilho crescendo na direção do player.
+	if charge_t > 0.0 and not dead:
+		var k := 1.0 - charge_t / 0.5
+		var bc := bolt_color()
+		var at := Vector2(facing * 16.0, -8.0)
+		draw_circle(at, 5.0 + k * 9.0, Color(bc, 0.35 + 0.4 * k))
+		draw_arc(at, 12.0 + k * 8.0, 0, TAU, 16, Color(bc, 0.7), 2.0)
 	if not has_sprites:
 		# Fallback procedural (espelha via transform p/ não espelhar o HUD).
 		if facing < 0:

@@ -69,6 +69,10 @@ var _part_t := 0.0
 var _unstick_anchor := Vector2.ZERO
 var _unstick_t := 0.0
 var _unstick_stage := 0
+# Rastro de movimento (fumaça na cor do campeão).
+var trail: Array = []
+const TRAIL_N := 14
+const TRAIL_LIFE := 0.35
 
 var world: World
 var controlled := true
@@ -122,6 +126,7 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 	attack_cd = 0.0
 	punch_t = 0.0
 	hit_flash = 0
+	trail.clear()
 	channeling = false
 	attack_t = 0.0
 	hurt_t = 0.0
@@ -277,6 +282,7 @@ func _physics_process(delta: float) -> void:
 	# Passo com corpo (raio): desliza na parede em vez de agarrar no canto.
 	position = MoveHelper.slide_step(world, position, step)
 	_watch_unstick(d, pushing)
+	_update_trail(d)
 	queue_redraw()
 
 ## Anti-garra do jogador: 0.7s empurrando sem sair do lugar → cutucada
@@ -315,6 +321,19 @@ func _nudge_side() -> void:
 		if MoveHelper.can_enter(world, cand):
 			position = cand
 			break
+
+## Rastro de fumaça: guarda posições recentes, desenha esvaecendo.
+func _update_trail(d: float) -> void:
+	if moving and is_alive():
+		trail.append({ p = position, life = TRAIL_LIFE })
+	var i := trail.size() - 1
+	while i >= 0:
+		trail[i].life -= d
+		if trail[i].life <= 0.0:
+			trail.remove_at(i)
+		i -= 1
+	while trail.size() > TRAIL_N:
+		trail.pop_front()
 
 func _held(action_id: String) -> bool:
 	if not bind.has(action_id):
@@ -607,6 +626,14 @@ func shop_catalog() -> Array:
 func _draw() -> void:
 	# Sombra suave no chão (acompanha a largura do sprite).
 	ArtUtil.fill_ellipse(self, 0, 10, sh_w, sh_w * 0.32, Color(0, 0, 0, 0.32))
+
+	# Rastro (fumaça na cor do campeão, atrás do corpo).
+	var rc := SkillIcon.role_color(role)
+	for tp in trail:
+		var a: float = clampf(float(tp.life) / TRAIL_LIFE, 0.0, 1.0)
+		var lp: Vector2 = tp.p - position
+		var tr := 2.0 + 6.0 * a
+		ArtUtil.fill_ellipse(self, lp.x, lp.y, tr, tr * 0.7, Color(rc, 0.28 * a))
 
 	# Fallback procedural (se o kit não carregou): espelha via transform.
 	if not has_sprites:
