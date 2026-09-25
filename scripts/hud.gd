@@ -48,6 +48,7 @@ func _draw() -> void:
 	_draw_skill_bar(p, w, h)
 	_draw_messages(w, h)
 	_draw_controls(p, h)
+	_draw_vignette(p, w, h)
 
 # ---------------------------------------------------------------------
 func _draw_top_left(p: Player) -> void:
@@ -218,8 +219,9 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 	ArtUtil.stroke_rrect(self, start_x, y, box, box, 6,
 		Color(1, 0.85, 0.2) if ready_a else Color(0.5, 0.5, 0.5), 2.0 if ready_a else 1.5)
 	var atk_col := Color(1, 0.86, 0.32) if ready_a else Color(0.47, 0.47, 0.47)
-	_center_str("ATK", start_x, box, y + 30, 16, atk_col, font)
-	_center_str("ESPAÇO", start_x, box, y + box - 5, 10, Color(1, 0.85, 0.2), font)
+	_center_str("ATK", start_x, box, y + 12, 10, atk_col, font)
+	SkillIcon.draw_basic(self, p.role, Vector2(start_x + box / 2.0, y + box / 2.0 + 3), 13.0, ready_a)
+	_center_str(_key("attack"), start_x, box, y + box - 5, 10, Color(1, 0.85, 0.2), font)
 	if p.attack_cd > 0.0:
 		var ratio := clampf(p.attack_cd / (22.0 / 60.0), 0.0, 1.0)
 		var ch := box * ratio
@@ -227,7 +229,7 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 		draw_rect(Rect2(start_x, y + ch - 1, box, 1), Color(1, 1, 0.4, 0.7))
 		_center_str("%.1f" % p.attack_cd, start_x, box, y + box / 2 + 5, 14, Color.WHITE, font)
 
-	# skills desbloqueadas (borda na cor da raridade)
+	# skills desbloqueadas (ícone + borda na cor da raridade)
 	for i in p.skills.size():
 		var s: Dictionary = p.skills[i]
 		var cfg: Dictionary = s.cfg
@@ -236,16 +238,21 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 		var rcol := ChampData.rarity_color(int(cfg.get("rarity", 0)))
 		ArtUtil.fill_rrect(self, bx, y, box, box, 6,
 			Color(0.16, 0.24, 0.16) if can else Color(0.16, 0.12, 0.12))
-		ArtUtil.stroke_rrect(self, bx, y, box, box, 6,
-			rcol if can else Color(0.5, 0.5, 0.5), 2.0 if can else 1.5)
-		draw_string(font, Vector2(bx + 6, y + 18), str(i + 1),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 0.85, 0.2))
-		var short: String = cfg.name
-		if short.length() > 8:
-			short = short.substr(0, 8)
-		draw_string(font, Vector2(bx + 22, y + 18), short,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, rcol)
-		draw_string(font, Vector2(bx + 4, y + box - 5), "%d mp" % cfg.mana,
+		var bw := 2.0 if can else 1.5
+		var bcol: Color = rcol if can else Color(0.5, 0.5, 0.5)
+		if can and int(cfg.get("rarity", 0)) >= 4:
+			var upulse := sin(Time.get_ticks_msec() * 0.008) * 0.5 + 0.5
+			bcol = Color(1, 0.85, 0.3, 0.6 + 0.4 * upulse)
+			bw = 3.0
+		ArtUtil.stroke_rrect(self, bx, y, box, box, 6, bcol, bw)
+		var center := Vector2(bx + box / 2.0, y + box / 2.0 + 2)
+		if can:
+			var gpulse := sin(Time.get_ticks_msec() * 0.006 + i) * 0.5 + 0.5
+			draw_circle(center, 17.0 + gpulse * 2.0, Color(rcol, 0.16))
+		SkillIcon.draw_icon(self, p.role, str(cfg.get("kind", "damage")), i, center, 13.0, not can)
+		draw_string(font, Vector2(bx + 4, y + 12), str(i + 1),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 0.85, 0.2))
+		draw_string(font, Vector2(bx + 4, y + box - 5), "%dmp" % cfg.mana,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.31, 0.55, 1))
 		if s.cd_left > 0.0:
 			var ratio := clampf(s.cd_left / maxf(0.01, cfg.cd), 0.0, 1.0)
@@ -289,6 +296,22 @@ func _draw_controls(p: Player, screen_h: float) -> void:
 			_key("attack"), maxi(1, p.skills.size()), _key("channel"), _key("item"), _key("shop"), _key("pause")]
 		col = Color(1, 1, 1, 0.5)
 	draw_string(font, Vector2(14, screen_h - 6), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
+
+## Vinheta vermelha pulsante quando o HP está baixo.
+func _draw_vignette(p: Player, w: float, h: float) -> void:
+	if p.max_hp <= 0:
+		return
+	var ratio := clampf(p.hp / float(p.max_hp), 0.0, 1.0)
+	if ratio >= 0.35:
+		return
+	var pulse := sin(Time.get_ticks_msec() * 0.009) * 0.5 + 0.5
+	var a := (0.35 - ratio) / 0.35 * (0.25 + 0.35 * pulse)
+	var t := 10.0
+	var col := Color(0.8, 0.05, 0.1, a)
+	draw_rect(Rect2(0, 0, w, t), col)
+	draw_rect(Rect2(0, h - t, w, t), col)
+	draw_rect(Rect2(0, 0, t, h), col)
+	draw_rect(Rect2(w - t, 0, t, h), col)
 
 func _key(action_id: String) -> String:
 	if main.get("settings") == null:

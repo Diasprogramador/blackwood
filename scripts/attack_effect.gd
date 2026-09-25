@@ -11,7 +11,12 @@ enum Type {
 	ENEMY_HIT,      # inimigo acertou - flash vermelho
 	SHADOW_STRIKE,  # assassino - lâmina escura
 	FROST_ARROW,    # atiradora - flecha gelo
-	CHANNEL         # canalização de mana - aura azul
+	CHANNEL,        # canalização de mana - aura azul
+	TANK_SLAM,      # Garen - onda de choque dourada + rachaduras
+	SHADOW_CLAWS,   # Zed - garras de sombra violeta
+	ARCANE_NOVA,    # Ahri - nova arcana com runa girando
+	FROST_VOLLEY,   # Ashe - saraivada de estilhaços de gelo
+	GALE_SWIPE,     # Janna - redemoinho de vento teal
 }
 
 var type: int = Type.SLASH
@@ -35,6 +40,11 @@ func _init(type_p: int = Type.SLASH, x: float = 0.0, y: float = 0.0,
 		Type.ENEMY_HIT: max_life = 10
 		Type.SHADOW_STRIKE: max_life = 16
 		Type.FROST_ARROW: max_life = 14
+		Type.TANK_SLAM: max_life = 18
+		Type.SHADOW_CLAWS: max_life = 16
+		Type.ARCANE_NOVA: max_life = 22
+		Type.FROST_VOLLEY: max_life = 16
+		Type.GALE_SWIPE: max_life = 16
 		Type.CHANNEL: max_life = 9999
 	life = max_life
 
@@ -67,6 +77,11 @@ func _draw() -> void:
 		Type.ENEMY_HIT: _draw_enemy_hit(t)
 		Type.SHADOW_STRIKE: _draw_shadow_strike(t, inv)
 		Type.FROST_ARROW: _draw_frost_arrow(t, inv)
+		Type.TANK_SLAM: _draw_tank_slam(t, inv)
+		Type.SHADOW_CLAWS: _draw_shadow_claws(t, inv)
+		Type.ARCANE_NOVA: _draw_arcane_nova(t, inv)
+		Type.FROST_VOLLEY: _draw_frost_volley(t, inv)
+		Type.GALE_SWIPE: _draw_gale_swipe(t, inv)
 		Type.CHANNEL: _draw_channel_aura()
 
 func _draw_slash(t: float, inv: float) -> void:
@@ -149,6 +164,95 @@ func _draw_frost_arrow(t: float, inv: float) -> void:
 		draw_line(m, m + Vector2(5, -5), col, 1.5)
 		draw_line(m, m + Vector2(5, 5), col, 1.5)
 	draw_circle(Vector2.ZERO, 5.0, Color(0.86, 0.96, 1, alpha))
+
+## Clarão no chão + anel se expandindo (base de todos os golpes).
+func _ground_flash(t: float, inv: float, col: Color, wide: float = 1.0) -> void:
+	var w := (34.0 + inv * 30.0) * fx_scale * wide
+	draw_ellipse_poly(Vector2(0, 26), w, w * 0.35, Color(col, 0.35 * t))
+	var r := (10.0 + inv * 46.0) * fx_scale
+	draw_arc(Vector2.ZERO, r, 0, TAU, 28, Color(col, 0.7 * t), 3.0)
+	draw_arc(Vector2.ZERO, r * 0.65, 0, TAU, 24, Color(1, 1, 1, 0.4 * t), 1.5)
+
+func _draw_tank_slam(t: float, inv: float) -> void:
+	var gold := Color(1, 0.8, 0.3)
+	_ground_flash(t, inv, gold, 1.2)
+	for i in 8:
+		var a := TAU * i / 8.0 + angle
+		var l0 := 12.0 * fx_scale
+		var l1 := (12.0 + inv * 44.0) * fx_scale
+		draw_line(Vector2(cos(a), sin(a)) * l0, Vector2(cos(a), sin(a)) * l1, Color(gold, 0.85 * t), 3.0)
+	draw_circle(Vector2.ZERO, maxf(3.0, 14.0 * t) * fx_scale, Color(1, 0.95, 0.7, 0.9 * t))
+	for i in 6:
+		var a := TAU * i / 6.0 + inv * 1.5
+		draw_circle(Vector2(cos(a), sin(a)) * 30.0 * fx_scale * inv, 2.5, Color(gold, 0.6 * t))
+
+func _draw_shadow_claws(t: float, inv: float) -> void:
+	var vio := Color(0.55, 0.2, 0.9)
+	_ground_flash(t, inv, vio, 0.9)
+	draw_circle(Vector2.ZERO, 20.0 * fx_scale * inv + 6.0, Color(0.25, 0.05, 0.45, 0.45 * t))
+	for i in 3:
+		var off := (i - 1) * 12.0
+		var p0 := Vector2(off - 26.0 * fx_scale * inv, -20.0 + off * 0.5)
+		var p1 := Vector2(off + 26.0 * fx_scale * inv, 20.0 + off * 0.5)
+		draw_line(p0, p1, Color(vio, 0.9 * t), 4.0)
+		draw_line(p0, p1, Color(0.9, 0.7, 1, 0.5 * t), 1.5)
+	draw_circle(Vector2.ZERO, maxf(2.0, 8.0 * t), Color(0.85, 0.6, 1, 0.8 * t))
+
+func _draw_arcane_nova(t: float, inv: float) -> void:
+	var arc := Color(0.7, 0.35, 1)
+	_ground_flash(t, inv, arc, 1.0)
+	var tri := PackedVector2Array()
+	for i in 3:
+		var a := -PI * 0.5 + inv * 2.5 + TAU * i / 3.0
+		tri.append(Vector2(cos(a), sin(a)) * 26.0 * fx_scale)
+	draw_polyline_closed(tri, Color(arc, 0.85 * t), 2.5)
+	draw_arc(Vector2.ZERO, (14.0 + inv * 34.0) * fx_scale, 0, TAU, 28, Color(0.45, 0.85, 1, 0.7 * t), 2.5)
+	draw_circle(Vector2.ZERO, maxf(3.0, 12.0 * t) * fx_scale, Color(1, 1, 1, 0.9 * t))
+	for i in 6:
+		var a := TAU * i / 6.0 - inv * 3.0
+		var rr := (20.0 + inv * 22.0) * fx_scale
+		draw_circle(Vector2(cos(a) * rr, sin(a) * rr), 2.5, Color(0.6, 0.95, 1, 0.8 * t))
+
+func _draw_frost_volley(t: float, inv: float) -> void:
+	var ice := Color(0.6, 0.88, 1)
+	_ground_flash(t, inv, ice, 1.0)
+	for i in 5:
+		var x := (i - 2) * 14.0 * fx_scale
+		var y0 := -44.0 * fx_scale + inv * 40.0 * fx_scale
+		var y1 := y0 + 26.0 * fx_scale
+		draw_line(Vector2(x, y0), Vector2(x, y1), Color(ice, 0.9 * t), 3.0)
+		draw_circle(Vector2(x, y1), 3.0, Color(1, 1, 1, 0.85 * t))
+		draw_line(Vector2(x, y1), Vector2(x - 5, y1 - 7), Color(ice, 0.7 * t), 1.5)
+		draw_line(Vector2(x, y1), Vector2(x + 5, y1 - 7), Color(ice, 0.7 * t), 1.5)
+	draw_arc(Vector2.ZERO, (12.0 + inv * 30.0) * fx_scale, 0, TAU, 24, Color(ice, 0.5 * t), 2.0)
+
+func _draw_gale_swipe(t: float, inv: float) -> void:
+	var teal := Color(0.35, 0.95, 0.85)
+	_ground_flash(t, inv, teal, 1.0)
+	for k in 2:
+		var rr := (16.0 + k * 12.0 + inv * 26.0) * fx_scale
+		draw_arc(Vector2.ZERO, rr, -0.9 + inv * 1.2 + k * 0.5, 1.6 + inv * 1.2 + k * 0.5,
+			22, Color(teal, (0.85 - k * 0.25) * t), 3.5 - k)
+	for i in 6:
+		var a := TAU * i / 6.0 + inv * 2.0
+		var rr := (10.0 + inv * 34.0) * fx_scale
+		draw_circle(Vector2(cos(a) * rr, sin(a) * rr * 0.6), 2.0, Color(0.85, 1, 0.95, 0.7 * t))
+	draw_line(Vector2(-8, 0), Vector2(8, 0), Color(1, 1, 1, 0.7 * t), 2.0)
+	draw_line(Vector2(0, -8), Vector2(0, 8), Color(1, 1, 1, 0.7 * t), 2.0)
+
+func draw_ellipse_poly(c: Vector2, rx: float, ry: float, col: Color) -> void:
+	var pts := PackedVector2Array()
+	for i in 24:
+		var a := TAU * i / 24.0
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
+	draw_colored_polygon(pts, col)
+
+func draw_polyline_closed(pts: PackedVector2Array, col: Color, w: float) -> void:
+	if pts.size() < 2:
+		return
+	var closed := PackedVector2Array(pts)
+	closed.append(pts[0])
+	draw_polyline(closed, col, w, true)
 
 func _draw_channel_aura() -> void:
 	var pulse := sin(Time.get_ticks_msec() * 0.008) * 0.5 + 0.5

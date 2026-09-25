@@ -750,8 +750,11 @@ func _do_basic_attack() -> void:
 		return
 	var target = result.target
 	var pos: Vector2 = target.position
-	_spawn_slash(pos, result.crit)
-	_spawn_skill_vfx(player.role, "attack", pos, result.crit)
+	# Efeito do personagem + estrela de critico por cima (antes: slash generico).
+	_spawn_role_fx(pos, SkillIcon.basic_effect_for(player.role), 0.85)
+	if result.crit:
+		_spawn_role_fx(pos, AttackEffect.Type.CRIT, 1.0)
+		add_shake(6.0)
 	Sfx.play(self, "hit", -8.0)
 	_float_text(str(result.dmg), pos + Vector2(0, -30),
 		Color(1, 0.85, 0.2) if result.crit else Color(1, 1, 0.5), 15 if result.crit else 12)
@@ -775,12 +778,15 @@ func _do_cast(index: int) -> void:
 			Color(0.4, 1, 0.5), 14)
 		return
 	var target = result.target
-	_spawn_burst(target.position, result.kind)
+	# Efeito do personagem (antes: burst generico por kind). Ultimate maior.
+	var fx_type: int = SkillIcon.effect_for(player.role, str(result.kind), index)
+	_spawn_role_fx(target.position, fx_type, 1.25 if index >= 4 else 1.0)
 	_spawn_skill_vfx(player.role, _slot_vfx(index), target.position, index >= 4)
+	add_shake(3.0)
 	if index >= 4:
 		add_shake(5.0)
 	_float_text(str(result.dmg), target.position + Vector2(0, -30), Color(0.5, 0.9, 1), 14)
-	hud.add_message("%s! −%d" % [result.name, result.dmg])
+	hud.add_message("%s %s! −%d" % [SkillIcon.glyph(player.role, str(result.kind), index), result.name, result.dmg])
 	if not target.is_alive():
 		_on_enemy_killed(target)
 
@@ -1037,31 +1043,10 @@ func _spawn_skill_vfx(role: String, kind: String, pos: Vector2, big: bool) -> vo
 	SpriteFx.spawn(fx_layer, rel, pos, 120.0 if big else 70.0,
 		0.4 if big else 0.3, player.flip if player != null else 1.0)
 
-func _spawn_slash(pos: Vector2, crit: bool) -> void:
-	var fx := AttackEffect.new(
-		AttackEffect.Type.CRIT if crit else AttackEffect.Type.SLASH, pos.x, pos.y)
-	fx.angle = randf_range(-0.4, 0.4)
-	fx_layer.add_child(fx)
-	if crit:
-		add_shake(6.0)
-
-func _spawn_burst(pos: Vector2, kind: String) -> void:
-	var fx_type := AttackEffect.Type.MAGIC_BURST
-	match kind:
-		"magic":
-			fx_type = AttackEffect.Type.MAGIC_BURST
-		"heal":
-			fx_type = AttackEffect.Type.HEAL
-		_:
-			# dano físico com o sabor da classe (port do chooseEffect do GamePanel)
-			if player != null and player.role == "assassin":
-				fx_type = AttackEffect.Type.SHADOW_STRIKE
-			elif player != null and player.role == "marksman":
-				fx_type = AttackEffect.Type.FROST_ARROW
-			else:
-				fx_type = AttackEffect.Type.SLASH
-	fx_layer.add_child(AttackEffect.new(fx_type, pos.x, pos.y))
-	add_shake(3.0)
+## Efeito de ataque do personagem (tipo vem do SkillIcon, escala por slot).
+func _spawn_role_fx(pos: Vector2, fx_type: int, scale_p: float = 1.0) -> void:
+	fx_layer.add_child(AttackEffect.new(
+		fx_type, pos.x, pos.y, randf_range(-0.3, 0.3), scale_p))
 
 func _spawn_heal(pos: Vector2) -> void:
 	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.HEAL, pos.x, pos.y))
@@ -1073,5 +1058,11 @@ func _spawn_hit_burst(pos: Vector2) -> void:
 		fx_layer.add_child(p)
 		var a := randf() * TAU
 		var sp := randf_range(1.5, 4.5)
-		p.setup(pos.x, pos.y, cos(a) * sp, sin(a) * sp,
-			Color(1, randf_range(0.4, 0.8), 0.2))
+		p.setup(pos.x, pos.y, cos(a) * sp, sin(a) * sp, _spark_color())
+
+## Faísca de impacto tingida com a cor do campeão.
+func _spark_color() -> Color:
+	var base := Color(1, randf_range(0.4, 0.8), 0.25)
+	if player == null:
+		return base
+	return base.lerp(SkillIcon.role_color(player.role), 0.45)

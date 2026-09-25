@@ -176,15 +176,16 @@ func _build_skill_rows() -> void:
 		var price := int(cfg.get("price", 0))
 		var is_unl := StageData.is_skill_unlocked(progress, role, i)
 		var b := _row_base(rcol)
+		var glyph := SkillIcon.glyph(role, str(cfg.get("kind", "damage")), i)
 		if is_unl:
-			b.text = "  ✔ [%d] %s — %s  •  %d mana • poder %d • CD %.0fs\n       %s" % [
-				i + 1, str(cfg.get("name", "?")), rname, int(cfg.get("mana", 0)),
+			b.text = "  %s ✔ [%d] %s — %s  •  %d mana • poder %d • CD %.0fs\n       %s" % [
+				glyph, i + 1, str(cfg.get("name", "?")), rname, int(cfg.get("mana", 0)),
 				int(cfg.get("power", 0)), float(cfg.get("cd", 0.0)), str(cfg.get("desc", ""))]
 			b.disabled = true
 			b.modulate = Color.WHITE
 		else:
-			b.text = "  [%d] %s — %s  •  ◆%d\n       %s" % [
-				i + 1, str(cfg.get("name", "?")), rname, price, str(cfg.get("desc", ""))]
+			b.text = "  %s [%d] %s — %s  •  ◆%d\n       %s" % [
+				glyph, i + 1, str(cfg.get("name", "?")), rname, price, str(cfg.get("desc", ""))]
 			var afford := bank >= price
 			b.modulate = Color.WHITE if afford else Color(0.55, 0.55, 0.6)
 			var idx := i
