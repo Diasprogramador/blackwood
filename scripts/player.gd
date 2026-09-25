@@ -311,7 +311,7 @@ func _watch_unstick(d: float, pushing: bool) -> void:
 func _nudge_side() -> void:
 	var dir := vel.normalized() if vel.length() > 1.0 else Vector2.RIGHT
 	for s in [1.0, -1.0]:
-		var cand := position + Vector2(-dir.y, dir.x) * s * 26.0
+		var cand: Vector2 = position + Vector2(-dir.y, dir.x) * s * 26.0
 		if MoveHelper.can_enter(world, cand):
 			position = cand
 			break
