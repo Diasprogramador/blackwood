@@ -31,11 +31,10 @@ func is_client() -> bool:
 	return mode == 2
 
 func _ready() -> void:
-	var mp := get_tree().multiplayer
-	mp.peer_connected.connect(_on_peer_connected)
-	mp.peer_disconnected.connect(_on_peer_disconnected)
-	mp.connected_to_server.connect(func(): server_ready.emit())
-	mp.connection_failed.connect(func(): connect_failed.emit())
+	get_tree().multiplayer.peer_connected.connect(_on_peer_connected)
+	get_tree().multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	get_tree().multiplayer.connected_to_server.connect(func(): server_ready.emit())
+	get_tree().multiplayer.connection_failed.connect(func(): connect_failed.emit())
 
 func _on_peer_connected(id: int) -> void:
 	peer_joined.emit(id)
@@ -100,7 +99,7 @@ func _try_upnp(port: int) -> String:
 	var err := up.discover(2000, 2, "InternetGatewayDevice")
 	if err != UPNP.UPNP_RESULT_SUCCESS:
 		return "UPnP indisponível — use mesma rede ou Radmin/ZeroTier."
-	var gw := up.get_gateway()
+	var gw = up.get_gateway()
 	if gw == null or not gw.is_valid_gateway():
 		return "UPnP indisponível — use mesma rede ou Radmin/ZeroTier."
 	up.add_port_mapping(port, port, "Blackwood", "UDP")
