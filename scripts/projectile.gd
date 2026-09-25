@@ -37,7 +37,12 @@ func shot_tick(d: float) -> void:
 	life -= d
 	position += vel * d
 	trail.append(position)
-	while trail.size() > 8:
+	var cap := 8
+	if GameSettings.quality_cache == 1:
+		cap = 6
+	elif GameSettings.quality_cache >= 2:
+		cap = 4
+	while trail.size() > cap:
 		trail.pop_front()
 	if life <= 0.0:
 		_fizzle()

@@ -91,6 +91,9 @@ static func stroke_rrect(node: CanvasItem, x: float, y: float, w: float, h: floa
 	stroke(node, rrect_pts(x, y, w, h, r), color, width, true)
 
 static func shadow(node: CanvasItem, cx: float, cy: float, rx: float, ry: float, alpha: float = 0.35) -> void:
+	# Qualidade Baixa: sem sombras procedurais (ganho direto no mobile).
+	if GameSettings.quality_cache >= 2:
+		return
 	fill_ellipse(node, cx, cy, rx, ry, Color(0, 0, 0, alpha))
 
 static func star_pts(cx: float, cy: float, r: float) -> PackedVector2Array:

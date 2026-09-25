@@ -167,6 +167,11 @@ func _draw_frost_arrow(t: float, inv: float) -> void:
 
 ## Clarão no chão + anel se expandindo (base de todos os golpes).
 func _ground_flash(t: float, inv: float, col: Color, wide: float = 1.0) -> void:
+	if GameSettings.quality_cache >= 2:
+		# Qualidade Baixa: só o clarão, sem anéis.
+		var w0 := 30.0 * fx_scale * wide
+		draw_ellipse_poly(Vector2(0, 26), w0, w0 * 0.35, Color(col, 0.3 * t))
+		return
 	var w := (34.0 + inv * 30.0) * fx_scale * wide
 	draw_ellipse_poly(Vector2(0, 26), w, w * 0.35, Color(col, 0.35 * t))
 	var r := (10.0 + inv * 46.0) * fx_scale

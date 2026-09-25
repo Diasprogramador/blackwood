@@ -59,6 +59,13 @@ func build(d: Dictionary) -> void:
 	_add_toggle(box, "Tela cheia", "fullscreen")
 	_add_toggle(box, "Tremor de tela", "shake")
 	_add_touch_row(box)
+	_add_cycle(box, "Qualidade", "quality", ["Alta", "Média", "Baixa"])
+	_add_toggle(box, "Mostrar FPS", "show_fps")
+
+	_add_section(box, "— HUD TOUCH —")
+	_add_toggle(box, "Barra de skills", "hud_bar")
+	_add_cycle(box, "Tamanho dos botões", "touch_size", ["Pequeno", "Médio", "Grande"])
+	_add_cycle(box, "Lado do joystick", "touch_side", ["Esquerda", "Direita"])
 
 	_add_section(box, "— TECLAS (clique e pressione a nova tecla) —")
 	for a in GameSettings.ACTIONS:
@@ -151,6 +158,35 @@ func _refresh_toggle(b: Button, key: String) -> void:
 	var on := bool(data.get(key, false))
 	b.text = "✔ LIGADO" if on else "✖ DESLIGADO"
 	MenuArt.apply_small_btn(b, Color(0.4, 0.85, 0.45) if on else Color(0.8, 0.4, 0.4), 14)
+
+func _add_cycle(parent: VBoxContainer, label: String, key: String, options: Array) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = label
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", MenuArt.CREAM)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(l)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(170, 32)
+	_refresh_cycle(b, key, options)
+	row.add_child(b)
+	var k := key
+	var opts := options
+	b.pressed.connect(func():
+		data[k] = (int(data.get(k, 0)) + 1) % opts.size()
+		GameSettings.save_data(data)
+		Sfx.play(self, "click")
+		_refresh_cycle(b, k, opts)
+	)
+
+func _refresh_cycle(b: Button, key: String, options: Array) -> void:
+	var idx := clampi(int(data.get(key, 0)), 0, maxi(0, options.size() - 1))
+	b.text = str(options[idx])
+	MenuArt.apply_small_btn(b, Color(0.55, 0.85, 1), 14)
 
 func _add_touch_row(parent: VBoxContainer) -> void:
 	var row := HBoxContainer.new()

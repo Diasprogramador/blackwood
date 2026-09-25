@@ -15,6 +15,7 @@ var joy_index := -1
 var joy_origin := Vector2.ZERO
 var joy_pos := Vector2.ZERO
 var btn_index := {}  # touch index -> id
+var _redraw_t := 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -45,16 +46,40 @@ func _to_local(viewport_pos: Vector2) -> Vector2:
 func _buttons() -> Array:
 	var w := size.x
 	var h := size.y
+	var s := _tscale()
+	var mir := _mirror()
 	var out := []
-	out.append({ id = "attack", c = Vector2(w - 95, h - 95), r = 44.0 })
+	out.append({ id = "attack", c = _bp(w - 95, h - 95, mir, w), r = 44.0 * s })
 	for i in 5:
 		out.append({ id = "skill%d" % (i + 1),
-			c = Vector2(w - 180, h - 90 - i * 62), r = 26.0 })
-	out.append({ id = "item", c = Vector2(w - 270, h - 95), r = 24.0 })
-	out.append({ id = "channel", c = Vector2(150, h - 235), r = 26.0 })
-	out.append({ id = "shop", c = Vector2(w - 95, 175), r = 22.0 })
-	out.append({ id = "pause", c = Vector2(w - 40, 175), r = 22.0 })
+			c = _bp(w - 180, h - 90 - i * 62, mir, w), r = 26.0 * s })
+	out.append({ id = "item", c = _bp(w - 270, h - 95, mir, w), r = 24.0 * s })
+	out.append({ id = "channel", c = _bp(150, h - 235, mir, w), r = 26.0 * s })
+	out.append({ id = "shop", c = _bp(w - 95, 175, mir, w), r = 22.0 * s })
+	out.append({ id = "pause", c = _bp(w - 40, 175, mir, w), r = 22.0 * s })
 	return out
+
+func _bp(x: float, y: float, mir: bool, w: float) -> Vector2:
+	return Vector2(w - x if mir else x, y)
+
+func _tsize() -> int:
+	if main == null:
+		return 1
+	var st = main.get("settings")
+	if not (st is Dictionary):
+		return 1
+	return clampi(int((st as Dictionary).get("touch_size", 1)), 0, 2)
+
+func _tscale() -> float:
+	return [0.85, 1.0, 1.2][_tsize()]
+
+func _mirror() -> bool:
+	if main == null:
+		return false
+	var st = main.get("settings")
+	if not (st is Dictionary):
+		return false
+	return int((st as Dictionary).get("touch_side", 0)) == 1
 
 func _at_button(p: Vector2) -> Dictionary:
 	for b in _buttons():
@@ -76,7 +101,7 @@ func _input(event: InputEvent) -> void:
 				btn_index[event.index] = id
 				if main != null:
 					main.touch_button(id)
-			elif pos.x < size.x * 0.45 and pos.y > size.y * 0.35 and joy_index < 0:
+			elif _joy_zone(pos) and joy_index < 0:
 				joy_index = event.index
 				joy_origin = pos
 				joy_pos = pos
@@ -93,8 +118,20 @@ func _input(event: InputEvent) -> void:
 			joy_pos = _to_local(event.position)
 			queue_redraw()
 
-func _process(_delta: float) -> void:
-	if visible:
+func _joy_zone(pos: Vector2) -> bool:
+	if pos.y <= size.y * 0.35:
+		return false
+	if _mirror():
+		return pos.x > size.x * 0.55
+	return pos.x < size.x * 0.45
+
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	_redraw_t += delta
+	var interval := 1.0 / 30.0 if GameSettings.quality_cache >= 1 else 1.0 / 60.0
+	if _redraw_t >= interval:
+		_redraw_t = 0.0
 		queue_redraw()
 
 func _draw() -> void:

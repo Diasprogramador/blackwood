@@ -6,6 +6,10 @@ extends Object
 
 const SAVE_PATH := "user://rpg_league_settings.cfg"
 
+## Cache vivo da qualidade (0 Alta, 1 Média, 2 Baixa): a arte procedural
+## lê daqui para cortar sombras, partículas e brilhos sem dicionário.
+static var quality_cache := 1
+
 const ACTIONS := [
 	{ id = "move_up", label = "Mover: cima", def = [KEY_W, KEY_UP] },
 	{ id = "move_down", label = "Mover: baixo", def = [KEY_S, KEY_DOWN] },
@@ -30,6 +34,8 @@ static func default_data() -> Dictionary:
 	return {
 		"master": 80, "music": 70, "sfx": 90,
 		"fullscreen": false, "shake": true, "touch": 0,
+		"quality": 1, "touch_size": 1, "touch_side": 0,
+		"hud_bar": true, "show_fps": false,
 		"keys": keys,
 	}
 
@@ -44,6 +50,12 @@ static func load_data() -> Dictionary:
 	d["fullscreen"] = bool(cfg.get_value("video", "fullscreen", false))
 	d["shake"] = bool(cfg.get_value("video", "shake", true))
 	d["touch"] = clampi(int(cfg.get_value("video", "touch", 0)), 0, 2)
+	d["quality"] = clampi(int(cfg.get_value("video", "quality", 1)), 0, 2)
+	d["touch_size"] = clampi(int(cfg.get_value("video", "touch_size", 1)), 0, 2)
+	d["touch_side"] = clampi(int(cfg.get_value("video", "touch_side", 0)), 0, 1)
+	d["hud_bar"] = bool(cfg.get_value("video", "hud_bar", true))
+	d["show_fps"] = bool(cfg.get_value("video", "show_fps", false))
+	quality_cache = int(d["quality"])
 	var keys: Dictionary = d["keys"]
 	for a in ACTIONS:
 		var loaded = cfg.get_value("keys", a.id, [])
@@ -62,6 +74,12 @@ static func save_data(d: Dictionary) -> void:
 	cfg.set_value("video", "fullscreen", bool(d.get("fullscreen", false)))
 	cfg.set_value("video", "shake", bool(d.get("shake", true)))
 	cfg.set_value("video", "touch", clampi(int(d.get("touch", 0)), 0, 2))
+	cfg.set_value("video", "quality", clampi(int(d.get("quality", 1)), 0, 2))
+	cfg.set_value("video", "touch_size", clampi(int(d.get("touch_size", 1)), 0, 2))
+	cfg.set_value("video", "touch_side", clampi(int(d.get("touch_side", 0)), 0, 1))
+	cfg.set_value("video", "hud_bar", bool(d.get("hud_bar", true)))
+	cfg.set_value("video", "show_fps", bool(d.get("show_fps", false)))
+	quality_cache = clampi(int(d.get("quality", 1)), 0, 2)
 	var keys: Dictionary = d.get("keys", {})
 	for a in ACTIONS:
 		if keys.has(a.id):

@@ -7,6 +7,7 @@ extends Control
 var main  # Main
 
 var messages: Array = []  # [{base, count, life}]
+var _redraw_t := 0.0
 
 func _ready() -> void:
 	# (tamanho full-rect aplicado pelo criador ANTES do add_child — ver main.gd)
@@ -33,7 +34,12 @@ func _process(delta: float) -> void:
 		if messages[i].life <= 0.0:
 			messages.remove_at(i)
 		i -= 1
-	queue_redraw()
+	# Fora da qualidade Alta, redesenha a 30Hz (barras e cooldowns suaves).
+	_redraw_t += delta
+	var interval := 1.0 / 30.0 if GameSettings.quality_cache >= 1 else 1.0 / 60.0
+	if _redraw_t >= interval:
+		_redraw_t = 0.0
+		queue_redraw()
 
 func _draw() -> void:
 	if main == null or main.player == null:
@@ -49,6 +55,7 @@ func _draw() -> void:
 	_draw_messages(w, h)
 	_draw_controls(p, h)
 	_draw_vignette(p, w, h)
+	_draw_fps(w)
 
 # ---------------------------------------------------------------------
 func _draw_top_left(p: Player) -> void:
@@ -252,6 +259,9 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 
 # ---------------------------------------------------------------------
 func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
+	# Barra desligável (o touch já mostra os cooldowns).
+	if main.get("settings") != null and not bool(main.get("settings").get("hud_bar", true)):
+		return
 	var box := 52.0
 	var gap := 6.0
 	var max_slots: int = ChampData.SKILL_SLOTS
@@ -364,6 +374,14 @@ func _draw_vignette(p: Player, w: float, h: float) -> void:
 	draw_rect(Rect2(0, h - t, w, t), col)
 	draw_rect(Rect2(0, 0, t, h), col)
 	draw_rect(Rect2(w - t, 0, t, h), col)
+
+## Cantinho de FPS (ativável nas configurações).
+func _draw_fps(w: float) -> void:
+	if main.get("settings") == null or not bool(main.get("settings").get("show_fps", false)):
+		return
+	var font := ThemeDB.fallback_font
+	draw_string(font, Vector2(w - 86, 170), "%d FPS" % Engine.get_frames_per_second(),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
 
 func _key(action_id: String) -> String:
 	if main.get("settings") == null:

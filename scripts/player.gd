@@ -74,6 +74,13 @@ var trail: Array = []
 const TRAIL_N := 14
 const TRAIL_LIFE := 0.35
 
+static func trail_cap() -> int:
+	if GameSettings.quality_cache == 1:
+		return 10
+	if GameSettings.quality_cache >= 2:
+		return 6
+	return TRAIL_N
+
 var world: World
 var controlled := true
 ## Multiplayer: host dirige o P2 com inputs da rede (ignora o teclado local).
@@ -342,7 +349,7 @@ func _update_trail(d: float) -> void:
 		if trail[i].life <= 0.0:
 			trail.remove_at(i)
 		i -= 1
-	while trail.size() > TRAIL_N:
+	while trail.size() > trail_cap():
 		trail.pop_front()
 
 func _held(action_id: String) -> bool:

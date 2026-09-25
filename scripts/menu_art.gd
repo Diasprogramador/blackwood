@@ -41,7 +41,12 @@ static func _draw_sky(node: CanvasItem, w: float, h: float) -> void:
 		node.draw_rect(Rect2(0, h * 0.62 * t, w, h * 0.62 / bands + 1), c)
 
 static func _draw_stars(node: CanvasItem, w: float, h: float) -> void:
-	for i in 40:
+	var total := 40
+	if GameSettings.quality_cache == 1:
+		total = 28
+	elif GameSettings.quality_cache >= 2:
+		total = 18
+	for i in total:
 		var hx := float(hash(i * 2 + 1) % 1000) / 1000.0
 		var hy := float(hash(i * 3 + 7) % 1000) / 1000.0
 		if hy > 0.45:
@@ -143,7 +148,10 @@ static func _draw_campfire(node: CanvasItem, cx: float, cy: float, tick: float) 
 	node.draw_line(Vector2(cx + 120, cy + 22), Vector2(cx + 230, cy + 18), Color(0.42, 0.26, 0.14), 14)
 
 static func _draw_embers(node: CanvasItem, w: float, h: float, tick: float) -> void:
-	for i in 16:
+	var total := 16
+	if GameSettings.quality_cache >= 1:
+		total = 8
+	for i in total:
 		var seed := float(hash(i * 11 + 5) % 1000) / 1000.0
 		var speed := 14.0 + seed * 22.0
 		var yy := h * 0.80 - fmod(tick * speed * 0.06 + seed * 260.0, 260.0)

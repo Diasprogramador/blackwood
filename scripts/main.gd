@@ -43,6 +43,7 @@ var mp_prev := {}
 var net_id_counter := 0
 var mp_client_id := -1
 var touch_ui: TouchControls = null
+var walk_cache: Array = []  # tiles livres (cache por run: evita scan 60x60 por spawn)
 var kill_count := 0
 var game_time := 0.0
 var minimap_tex: ImageTexture
@@ -630,6 +631,7 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	world.generate(seed_value)
 	world.apply_stage(cur_stage)
 	minimap_tex = world.build_minimap_image()
+	walk_cache = world.walkable_tiles()
 
 	var c: Dictionary = ChampData.CHAMPS[_selected]
 	player = PlayerScript.new()
@@ -1217,7 +1219,7 @@ func _apply_psnap(pl: Player, arr: Array) -> void:
 		if pl.trail[ti].life <= 0.0:
 			pl.trail.remove_at(ti)
 		ti -= 1
-	while pl.trail.size() > Player.TRAIL_N:
+	while pl.trail.size() > Player.trail_cap():
 		pl.trail.pop_front()
 
 func mp_apply_enemies(list: Array) -> void:
@@ -1800,7 +1802,9 @@ func _spawn_minion(force_elite: bool = false) -> void:
 	wave_spawned += 1
 
 func _pick_spawn_pos() -> Vector2:
-	var walkable := world.walkable_tiles()
+	if walk_cache.is_empty():
+		walk_cache = world.walkable_tiles()
+	var walkable := walk_cache
 	if walkable.is_empty() or player == null:
 		return Vector2.INF
 	for attempt in 40:
@@ -1880,7 +1884,12 @@ func _spawn_hit_burst(pos: Vector2) -> void:
 	if mp == 1:
 		netplay.fx_spawn.rpc(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y, 1.0)
 	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y))
-	for i in 8:
+	var n := 8
+	if GameSettings.quality_cache == 1:
+		n = 5
+	elif GameSettings.quality_cache >= 2:
+		n = 3
+	for i in n:
 		var p := ParticleFx.new()
 		fx_layer.add_child(p)
 		var a := randf() * TAU
