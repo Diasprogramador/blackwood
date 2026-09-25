@@ -191,6 +191,9 @@ static func style_btn(accent: Color, selected: bool) -> StyleBoxFlat:
 		sb.border_color = Color(0.35, 0.33, 0.30)
 		sb.set_border_width_all(1)
 	sb.set_corner_radius_all(10)
+	sb.shadow_color = Color(0, 0, 0, 0.45)
+	sb.shadow_size = 6
+	sb.shadow_offset = Vector2(0, 2)
 	sb.content_margin_left = 16
 	sb.content_margin_right = 16
 	sb.content_margin_top = 8
@@ -313,3 +316,179 @@ static func apply_row_btn(b: Button, accent: Color) -> void:
 
 static func spark() -> String:
 	return "✦"
+
+# ---------------------------------------------------------------------
+#  IDENTIDADE BLACKWOOD — moldura dourada, brasões e véus
+# ---------------------------------------------------------------------
+## Cantos em L + rebites (a assinatura visual do jogo).
+static func frame_corners(node: CanvasItem, rect: Rect2, accent: Color) -> void:
+	var p := rect.position
+	var s := rect.size
+	if s.x <= 0.0 or s.y <= 0.0:
+		return
+	var L := 14.0
+	var t := 2.5
+	var c := Color(accent, 0.9)
+	for corner in [p, Vector2(p.x + s.x, p.y), Vector2(p.x, p.y + s.y), p + s]:
+		var sx := 1.0 if corner.x < p.x + s.x * 0.5 else -1.0
+		var sy := 1.0 if corner.y < p.y + s.y * 0.5 else -1.0
+		node.draw_line(corner, corner + Vector2(sx * L, 0), c, t)
+		node.draw_line(corner, corner + Vector2(0, sy * L), c, t)
+		node.draw_circle(corner + Vector2(sx * 8.0, sy * 8.0), 2.0, Color(c, 0.7))
+
+## Moldura de tela (chamar no _draw depois do draw_back).
+static func draw_screen_frame(node: CanvasItem, size: Vector2) -> void:
+	var w := size.x
+	var h := size.y
+	if w <= 0.0 or h <= 0.0:
+		return
+	var inset := 8.0
+	node.draw_rect(Rect2(inset, inset, w - inset * 2, h - inset * 2), Color(GOLD, 0.35), false, 1.5)
+	node.draw_rect(Rect2(inset + 4, inset + 4, w - (inset + 4) * 2, h - (inset + 4) * 2),
+		Color(GOLD, 0.15), false, 1.0)
+	frame_corners(node, Rect2(inset, inset, w - inset * 2, h - inset * 2), Color(GOLD, 0.8))
+
+## Painel com cantos rebitados (troque PanelContainer por ele).
+class FramePanel extends PanelContainer:
+	var accent := Color(1.0, 0.85, 0.4)
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var inset := 5.0
+		MenuArt.frame_corners(self,
+			Rect2(inset, inset, size.x - inset * 2, size.y - inset * 2), accent)
+
+## Caveira (game over).
+static func draw_skull(node: CanvasItem, c: Vector2, r: float) -> void:
+	var bone := Color(0.88, 0.85, 0.78)
+	var dark := Color(0.15, 0.05, 0.05)
+	ArtUtil.fill_ellipse(node, c.x, c.y - r * 0.15, r * 0.62, r * 0.58, bone)
+	node.draw_rect(Rect2(c.x - r * 0.32, c.y + r * 0.25, r * 0.64, r * 0.35), bone)
+	ArtUtil.fill_ellipse(node, c.x - r * 0.25, c.y - r * 0.15, r * 0.2, r * 0.24, dark)
+	ArtUtil.fill_ellipse(node, c.x + r * 0.25, c.y - r * 0.15, r * 0.2, r * 0.24, dark)
+	ArtUtil.fill_ellipse(node, c.x - r * 0.25, c.y - r * 0.15, r * 0.08, r * 0.1,
+		Color(1, 0.3, 0.2, 0.9))
+	ArtUtil.fill_ellipse(node, c.x + r * 0.25, c.y - r * 0.15, r * 0.08, r * 0.1,
+		Color(1, 0.3, 0.2, 0.9))
+	node.draw_colored_polygon(PackedVector2Array([
+		c + Vector2(0, r * 0.15), c + Vector2(-r * 0.1, r * 0.35), c + Vector2(r * 0.1, r * 0.35)]), dark)
+	for i in 3:
+		var x := c.x - r * 0.2 + i * r * 0.2
+		node.draw_line(Vector2(x, c.y + r * 0.35), Vector2(x, c.y + r * 0.58), dark, 1.5)
+
+class EmblemSkull extends Control:
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		custom_minimum_size = Vector2(64, 64)
+
+	func _draw() -> void:
+		MenuArt.draw_skull(self, size * 0.5, 24.0)
+
+## Explosão estelar (vitória).
+static func draw_starburst(node: CanvasItem, c: Vector2, r: float) -> void:
+	ArtUtil.fill_ellipse(node, c.x, c.y, r * 1.05, r * 1.05, Color(1, 0.85, 0.3, 0.18))
+	var pts := PackedVector2Array()
+	for i in 16:
+		var a := TAU * i / 16.0 - PI * 0.5
+		var rr := r * 0.85 if i % 2 == 0 else r * 0.38
+		pts.append(c + Vector2(cos(a), sin(a)) * rr)
+	node.draw_colored_polygon(pts, Color(1, 0.82, 0.3))
+	ArtUtil.fill_ellipse(node, c.x, c.y, r * 0.25, r * 0.25, Color(1, 1, 1))
+	for i in 8:
+		var a := TAU * i / 8.0
+		node.draw_line(c + Vector2(cos(a), sin(a)) * r * 0.9,
+			c + Vector2(cos(a), sin(a)) * r * 1.15, Color(1, 0.9, 0.5, 0.7), 2.0)
+
+class EmblemStar extends Control:
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		custom_minimum_size = Vector2(64, 64)
+
+	func _draw() -> void:
+		MenuArt.draw_starburst(self, size * 0.5, 24.0)
+
+## Crescente (pausa).
+static func draw_crescent(node: CanvasItem, c: Vector2, r: float) -> void:
+	node.draw_arc(c, r * 0.7, 0.7, 5.3, 24, Color(0.85, 0.9, 1), 5.0)
+	node.draw_arc(c, r * 0.7, 1.0, 5.0, 22, Color(1, 1, 1), 1.5)
+	node.draw_circle(c + Vector2(r * 0.55, -r * 0.45), 2.0, Color(1, 1, 0.8))
+	node.draw_circle(c + Vector2(-r * 0.6, r * 0.4), 1.5, Color(1, 1, 0.8, 0.7))
+
+class EmblemMoon extends Control:
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		custom_minimum_size = Vector2(56, 56)
+
+	func _draw() -> void:
+		MenuArt.draw_crescent(self, size * 0.5, 22.0)
+
+## Véu animado com brasas (fundo de game over / vitória).
+class EmberVeil extends Control:
+	var tick := 0.0
+	var dim := Color(0.08, 0.0, 0.0, 0.72)
+	var ember := Color(1, 0.4, 0.12)
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _process(delta: float) -> void:
+		if not visible:
+			return
+		tick += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0.0 or h <= 0.0:
+			return
+		draw_rect(Rect2(Vector2.ZERO, size), dim)
+		for i in 6:
+			var t := float(i) / 6.0
+			var a := 0.35 * (1.0 - t)
+			var m := 60.0 * t
+			var cc := Color(0, 0, 0, a)
+			draw_rect(Rect2(m, m, w - m * 2, 5), cc)
+			draw_rect(Rect2(m, h - m - 5, w - m * 2, 5), cc)
+			draw_rect(Rect2(m, m, 5, h - m * 2), cc)
+			draw_rect(Rect2(w - m - 5, m, 5, h - m * 2), cc)
+		for i in 22:
+			var seed := float(hash(i * 13 + 7) % 1000) / 1000.0
+			var yy := h - fmod(tick * (14.0 + seed * 20.0) + seed * 400.0, h + 40.0) + 20.0
+			var xx := w * (0.2 + 0.6 * seed) + sin(tick * 0.8 + seed * 9.0) * 30.0
+			var ea := clampf(yy / h, 0.0, 1.0) * 0.8
+			draw_circle(Vector2(xx, yy), 1.8, Color(ember, ea))
+
+## Tecla física (botões de configuração): keycap claro com sombra 3D.
+static func style_keycap(capturing := false) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.95, 0.5, 0.45, 0.98) if capturing else Color(0.85, 0.82, 0.74, 0.98)
+	sb.border_color = Color(0.25, 0.22, 0.18)
+	sb.set_border_width_all(2)
+	sb.border_width_bottom = 4
+	sb.set_corner_radius_all(6)
+	sb.shadow_color = Color(0, 0, 0, 0.4)
+	sb.shadow_size = 4
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 4
+	sb.content_margin_bottom = 4
+	return sb
+
+static func apply_keycap(b: Button, capturing := false) -> void:
+	b.add_theme_stylebox_override("normal", style_keycap(capturing))
+	var pr := style_keycap(capturing)
+	pr.border_width_bottom = 2
+	b.add_theme_stylebox_override("pressed", pr)
+	var hv := style_keycap(capturing)
+	hv.border_color = Color(1, 0.85, 0.4)
+	b.add_theme_stylebox_override("hover", hv)
+	b.add_theme_stylebox_override("disabled", style_keycap())
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_color_override("font_color", Color(0.15, 0.12, 0.1))
+	b.add_theme_color_override("font_hover_color", Color(0.1, 0.08, 0.06))
+	b.add_theme_color_override("font_pressed_color", Color(0.1, 0.08, 0.06))
+	b.add_theme_font_size_override("font_size", 14)

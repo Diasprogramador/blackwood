@@ -161,11 +161,12 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	_refresh()
 
 func _make_card(c: Dictionary, i: int) -> PanelContainer:
-	var card := PanelContainer.new()
+	var card := MenuArt.FramePanel.new()
 	card.custom_minimum_size = Vector2(CARD_W, CARD_H)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var col: Color = c.color
+	card.accent = col
 	card.add_theme_stylebox_override("panel", MenuArt.style_card(col, i == selected_index))
 
 	var inner := VBoxContainer.new()
@@ -268,6 +269,7 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)
+	MenuArt.draw_screen_frame(self, size)
 
 func handle_key(key: int) -> bool:
 	var n: int = ChampData.CHAMPS.size()

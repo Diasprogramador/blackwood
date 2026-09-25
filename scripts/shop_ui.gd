@@ -42,7 +42,7 @@ func _build() -> void:
 	add_child(center)
 
 	# painel central
-	var panel := PanelContainer.new()
+	var panel := MenuArt.FramePanel.new()
 	panel.name = "Panel"
 	panel.custom_minimum_size = Vector2(580, 600)
 	center.add_child(panel)

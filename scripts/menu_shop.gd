@@ -37,7 +37,7 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(margin)
 
-	var panel := PanelContainer.new()
+	var panel := MenuArt.FramePanel.new()
 	panel.add_theme_stylebox_override("panel", MenuArt.style_panel())
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(panel)
@@ -246,6 +246,7 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)
+	MenuArt.draw_screen_frame(self, size)
 
 func handle_key(key: int) -> bool:
 	if key == KEY_ESCAPE:

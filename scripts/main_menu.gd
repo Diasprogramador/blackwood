@@ -148,6 +148,7 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)
+	MenuArt.draw_screen_frame(self, size)
 
 func handle_key(key: int) -> bool:
 	if key == KEY_UP or key == KEY_W:
