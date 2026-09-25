@@ -4,6 +4,10 @@ RPG de ação top-down feito em **Godot 4.7** — combate, gold drop, trilhas e 
 
 Escolha um campeão, vença **3 fases x 5 ondas (15 ondas)**, com mini-bosses, bosses, elites, loja, itens e desbloqueio progressivo de skills.
 
+## Jogar (Windows)
+
+Baixe a última versão em **[Releases](https://github.com/Diasprogramador/blackwood/releases)**, extraia o zip e rode `blackwood.exe`. Para o co-op online, os dois precisam da mesma versão: um hospeda em **👥 Multiplayer** e passa o IP (ou usem Radmin VPN/ZeroTier).
+
 ## Como rodar
 
 1. Instale o **Godot 4.7** (renderer `gl_compatibility`).
