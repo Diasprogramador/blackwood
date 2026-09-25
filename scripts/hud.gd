@@ -145,6 +145,7 @@ func _draw_wave_banner(screen_w: float) -> void:
 	draw_rect(Rect2(x + 12, 48, 156, 6), Color(0, 0, 0, 0.8))
 	draw_rect(Rect2(x + 12, 48, 156 * prog, 6), diff_col)
 	draw_rect(Rect2(x + 12, 48, 156, 6), Color(1, 1, 1, 0.35), false, 1.0)
+	_draw_boss_bar(screen_w)
 	if boss_alive:
 		var pulse := sin(Time.get_ticks_msec() * 0.012) * 0.5 + 0.5
 		var warn := "★ BOSS NA ARENA ★"
@@ -163,6 +164,36 @@ func _draw_wave_banner(screen_w: float) -> void:
 			Color(0.4, 0.15, 0.03, 0.55 + 0.3 * pulse))
 		draw_string(font, Vector2(screen_w / 2.0 - tww / 2, wy), warn,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.55 + 0.25 * pulse, 0.25))
+
+# ---------------------------------------------------------------------
+func _draw_boss_bar(screen_w: float) -> void:
+	# Maior ameaça viva (boss primeiro, senão mini-boss).
+	var foe = null
+	for e in main.enemies:
+		if not is_instance_valid(e) or not e.is_alive():
+			continue
+		if e.is_boss():
+			foe = e
+			break
+		elif e.is_miniboss() and foe == null:
+			foe = e
+	if foe == null:
+		return
+	var font := ThemeDB.fallback_font
+	var bw := 240.0
+	var bx := screen_w / 2.0 - bw / 2.0
+	var by := 96.0
+	var is_boss: bool = foe.is_boss()
+	var col := Color(0.75, 0.2, 0.9) if is_boss else Color(1.0, 0.45, 0.1)
+	var label := "%s %s Lv.%d" % ["★ BOSS" if is_boss else "👹 MINI-BOSS", foe.type_name, foe.level]
+	ArtUtil.fill_rrect(self, bx - 8, by - 4, bw + 16, 34, 8, Color(0, 0, 0, 0.62))
+	var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+	draw_string(font, Vector2(screen_w / 2.0 - tw / 2, by + 10), label,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
+	var ratio := clampf(foe.hp / float(maxi(1, foe.max_hp)), 0.0, 1.0)
+	draw_rect(Rect2(bx, by + 16, bw, 7), Color(0, 0, 0, 0.85))
+	draw_rect(Rect2(bx, by + 16, bw * ratio, 7), col)
+	draw_rect(Rect2(bx, by + 16, bw, 7), Color(1, 1, 1, 0.4), false, 1.0)
 
 # ---------------------------------------------------------------------
 func _draw_minimap(p: Player, screen_w: float) -> void:

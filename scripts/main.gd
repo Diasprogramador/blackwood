@@ -155,6 +155,13 @@ func _ready() -> void:
 
 	_enter_menu()
 
+func _overlay_btn(txt: String) -> Button:
+	var b := Button.new()
+	b.text = txt
+	b.custom_minimum_size = Vector2(220, 44)
+	MenuArt.apply_menu_btn(b, MenuArt.GOLD)
+	return b
+
 func _build_pause_ui(parent: Node) -> void:
 	pause_layer = Control.new()
 	pause_layer.set_anchors_preset(Control.PRESET_FULL_RECT, false)
@@ -167,20 +174,36 @@ func _build_pause_ui(parent: Node) -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT, false)
 	pause_layer.add_child(dim)
 
-	var lbl := Label.new()
-	lbl.text = "PAUSADO"
-	lbl.add_theme_font_size_override("font_size", 36)
-	lbl.add_theme_color_override("font_color", Color.WHITE)
-	lbl.set_anchors_preset(Control.PRESET_CENTER)
-	lbl.position = Vector2(-70, -50)
-	pause_layer.add_child(lbl)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	pause_layer.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", MenuArt.style_panel())
+	center.add_child(panel)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+
+	var lbl := MenuArt.title_label_gold("PAUSADO", 36)
+	v.add_child(lbl)
 
 	var sub := Label.new()
-	sub.text = "ESC para continuar"
-	sub.add_theme_font_size_override("font_size", 16)
-	sub.set_anchors_preset(Control.PRESET_CENTER)
-	sub.position = Vector2(-80, 10)
-	pause_layer.add_child(sub)
+	sub.text = "Respire — a Rift espera por você."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 14)
+	sub.add_theme_color_override("font_color", MenuArt.CREAM)
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(sub)
+
+	var cont := _overlay_btn("▶ Continuar  (ESC)")
+	cont.pressed.connect(func(): _set_pause(false))
+	v.add_child(cont)
+
+	var menu := _overlay_btn("🏠 Menu principal")
+	menu.pressed.connect(func(): _enter_menu())
+	v.add_child(menu)
 
 func _build_gameover_ui(parent: Node) -> void:
 	gameover_layer = Control.new()
@@ -196,8 +219,8 @@ func _build_gameover_ui(parent: Node) -> void:
 
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.custom_minimum_size = Vector2(420, 240)
-	panel.position = Vector2(-210, -120)
+	panel.custom_minimum_size = Vector2(460, 300)
+	panel.position = Vector2(-230, -150)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.1, 0.06, 0.06, 0.97)
 	sb.border_color = Color(0.8, 0.2, 0.2)
@@ -234,7 +257,22 @@ func _build_gameover_ui(parent: Node) -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.add_theme_color_override("font_color", Color(1, 1, 0.4))
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(hint)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(row)
+
+	var again := _overlay_btn("🔄 De novo  (R)")
+	again.pressed.connect(func(): start_game())
+	row.add_child(again)
+
+	var menu := _overlay_btn("🏠 Menu  (ENTER)")
+	menu.pressed.connect(func(): _enter_menu())
+	row.add_child(menu)
 
 func _build_victory_ui(parent: Node) -> void:
 	victory_layer = Control.new()
@@ -293,7 +331,22 @@ func _build_victory_ui(parent: Node) -> void:
 	hint2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint2.add_theme_font_size_override("font_size", 14)
 	hint2.add_theme_color_override("font_color", Color(1, 1, 0.4))
+	hint2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(hint2)
+
+	var row2 := HBoxContainer.new()
+	row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	row2.add_theme_constant_override("separation", 12)
+	row2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(row2)
+
+	var again2 := _overlay_btn("🔄 De novo  (R)")
+	again2.pressed.connect(func(): start_game())
+	row2.add_child(again2)
+
+	var menu2 := _overlay_btn("🏠 Menu  (ENTER)")
+	menu2.pressed.connect(func(): _enter_menu())
+	row2.add_child(menu2)
 
 # =====================================================================
 #  FLUXO DE TELAS (menu → campeão → fase → jogo)
