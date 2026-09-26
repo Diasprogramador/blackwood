@@ -16,6 +16,8 @@ var _tick := 0.0
 var _buttons: Array[Button] = []
 var _focus := 0
 var _essence_label: Label = null
+var _update_btn: Button = null
+var _http: HTTPRequest = null
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -100,12 +102,24 @@ func build(bank: int) -> void:
 	vbox.add_child(hint)
 
 	var ver := Label.new()
-	ver.text = "Blackwood v1.0  •  Godot 4.7"
+	ver.text = "Blackwood v%s" % app_version()
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ver.add_theme_font_size_override("font_size", 11)
 	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
 	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(ver)
+
+	_update_btn = Button.new()
+	_update_btn.custom_minimum_size = Vector2(1, 40)
+	MenuArt.apply_small_btn(_update_btn, Color(0.4, 0.9, 0.45), 14)
+	_update_btn.visible = false
+	_update_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_update_btn.pressed.connect(func():
+		Sfx.play(self, "click")
+		OS.shell_open("https://github.com/Diasprogramador/blackwood/releases/latest")
+	)
+	vbox.add_child(_update_btn)
+	_check_update()
 
 	var login_row := HBoxContainer.new()
 	login_row.alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -158,6 +172,65 @@ func _activate(i: int) -> void:
 		2: shop_pressed.emit()
 		3: settings_pressed.emit()
 		_: exit_pressed.emit()
+
+static func app_version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
+## Há release nova no GitHub? (falha silenciosa offline)
+func _check_update() -> void:
+	if _http != null and is_instance_valid(_http):
+		_http.queue_free()
+	_http = HTTPRequest.new()
+	_http.timeout = 8
+	add_child(_http)
+	_http.request_completed.connect(_on_update_checked)
+	_http.request("https://api.github.com/Diasprogramador/blackwood/releases/latest")
+
+func _on_update_checked(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if code != 200 or body.is_empty() or _update_btn == null:
+		return
+	var data = JSON.parse_string(body.get_string_from_utf8())
+	if not (data is Dictionary):
+		return
+	var tag := str((data as Dictionary).get("tag_name", ""))
+	if tag != "" and is_newer(app_version(), tag):
+		_update_btn.text = "⬇ Atualizar para %s" % tag
+		_update_btn.visible = true
+
+static func is_newer(cur: String, remote: String) -> bool:
+	var a := _parts(cur)
+	var b := _parts(remote)
+	var an: Array = a[0]
+	var bn: Array = b[0]
+	var n := maxi(an.size(), bn.size())
+	for i in n:
+		var av := int(an[i]) if i < an.size() else 0
+		var bv := int(bn[i]) if i < bn.size() else 0
+		if bv != av:
+			return bv > av
+	var asuf := str(a[1])
+	var bsuf := str(b[1])
+	if asuf == bsuf:
+		return false
+	if asuf == "":
+		return false
+	if bsuf == "":
+		return true
+	return bsuf > asuf
+
+static func _parts(v: String) -> Array:
+	var s := v.strip_edges()
+	if s.begins_with("v") or s.begins_with("V"):
+		s = s.substr(1)
+	var suffix := ""
+	if s.contains("-"):
+		var sp := s.split("-", true, 1)
+		s = sp[0]
+		suffix = str(sp[1]) if sp.size() > 1 else ""
+	var nums := []
+	for p in s.split("."):
+		nums.append(int(p) if str(p).is_valid_int() else 0)
+	return [nums, suffix]
 
 func _process(_delta: float) -> void:
 	if not visible:
