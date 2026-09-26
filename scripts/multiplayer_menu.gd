@@ -48,6 +48,17 @@ func build_host(local_ip: String, port: int, net_info: String, max_n: int = 2) -
 	v.add_child(_label("Seu IP local: %s   •   porta %d" % [local_ip, port], 15, Color(0.55, 0.85, 1)))
 	v.add_child(_label(net_info, 12, Color(1, 1, 1, 0.6)))
 	v.add_child(_label("Pela internet sem configurar roteador:\nuse Radmin VPN ou ZeroTier e passe o IP de lá.", 12, Color(1, 0.85, 0.4)))
+	var copy := Button.new()
+	copy.text = "📋 Copiar IP (%s)" % local_ip
+	copy.custom_minimum_size = Vector2(300, 38)
+	MenuArt.apply_small_btn(copy, Color(0.55, 0.85, 1), 13)
+	var clip := local_ip
+	copy.pressed.connect(func():
+		DisplayServer.clipboard_set(clip)
+		Sfx.play(self, "click")
+		set_status("IP copiado! Mande para seu amigo.")
+	)
+	v.add_child(_centered(copy))
 	v.add_child(_label("Jogadores na sala (máx. 4):", 14, MenuArt.CREAM))
 	var crow := HBoxContainer.new()
 	crow.alignment = BoxContainer.ALIGNMENT_CENTER

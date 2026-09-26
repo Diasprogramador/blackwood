@@ -281,7 +281,7 @@ func _flood(start: Vector2i) -> Dictionary:
 	while not stack.is_empty():
 		var c: Vector2i = stack.pop_back()
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			var n := c + d
+			var n: Vector2i = c + d
 			if n.x < 2 or n.y < 2 or n.x >= MAP_W - 2 or n.y >= MAP_H - 2:
 				continue
 			if seen.has(n) or is_solid_tile(n.x, n.y):

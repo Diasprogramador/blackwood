@@ -248,8 +248,15 @@ func ai_update(player: Player, delta: float) -> void:
 		elif moved < speed * delta * 0.25:
 			_stuck_t += delta
 			if _stuck_t >= 3.0:
-				# Último recurso: teleporta para o ponto livre mais próximo.
-				var free := MoveHelper.find_free(world, position)
+				# 3s garrado: volta ~3 blocos para trás e tenta outra rota.
+				var back := Vector2.ZERO
+				if evel.length() > 1.0:
+					back = -evel.normalized()
+				else:
+					back = (position - player.position).normalized()
+				var free := MoveHelper.find_free_behind(world, position, back, 3)
+				if free == Vector2.INF:
+					free = MoveHelper.find_free(world, position)
 				if free != Vector2.INF:
 					position = free
 				_stuck_t = 0.0

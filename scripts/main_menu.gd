@@ -9,6 +9,7 @@ signal shop_pressed
 signal settings_pressed
 signal exit_pressed
 signal multi_pressed
+signal login_pressed
 
 var essence := 0
 var _tick := 0.0
@@ -105,6 +106,21 @@ func build(bank: int) -> void:
 	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
 	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(ver)
+
+	var login_row := HBoxContainer.new()
+	login_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	login_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(login_row)
+
+	var login := Button.new()
+	login.text = "👤 %s" % Profiles.current_name()
+	login.custom_minimum_size = Vector2(220, 36)
+	MenuArt.apply_small_btn(login, Color(0.55, 0.85, 1), 13)
+	login.pressed.connect(func():
+		Sfx.play(self, "click")
+		login_pressed.emit()
+	)
+	login_row.add_child(login)
 
 	_refresh()
 

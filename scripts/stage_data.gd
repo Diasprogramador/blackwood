@@ -119,7 +119,7 @@ static func load_progress() -> Dictionary:
 	}
 	var supplies := {"hp": 0, "mp": 0, "elix": 0}
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
+	if cfg.load(Profiles.save_path()) == OK:
 		unlocked = clampi(int(cfg.get_value("progress", "unlocked_stages", 1)), 1, STAGES.size())
 		for s in STAGES.size():
 			var loaded = cfg.get_value("progress", "cleared_%d" % s, [])
@@ -153,7 +153,7 @@ static func save_progress(prog: Dictionary) -> void:
 	var supplies: Dictionary = prog.get("supplies", {})
 	for sid in supplies.keys():
 		cfg.set_value("progress", "supply_" + str(sid), int(supplies[sid]))
-	cfg.save(SAVE_PATH)
+	cfg.save(Profiles.save_path())
 
 static func is_stage_unlocked(prog: Dictionary, stage: int) -> bool:
 	return stage < int(prog.get("unlocked", 1))

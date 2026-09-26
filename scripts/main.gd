@@ -4,7 +4,7 @@ extends Node2D
 ## spawn, câmera, drop de gold e integração das UIs.
 ## Port de Main.java (modo gráfico) + GamePanel.java (loop, spawn, input, overlays).
 
-enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI }
+enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE }
 
 const WorldScript := preload("res://scripts/world.gd")
 const PlayerScript := preload("res://scripts/player.gd")
@@ -47,6 +47,7 @@ var msg_seen := 0
 var mp_prev := {}
 var net_id_counter := 0
 var touch_ui: TouchControls = null
+var profiles_ui: ProfilesMenu = null
 var walk_cache: Array = []  # tiles livres (cache por run: evita scan 60x60 por spawn)
 var kill_count := 0
 var game_time := 0.0
@@ -97,6 +98,7 @@ func _ready() -> void:
 	settings = GameSettings.load_data()
 	GameSettings.apply_video(settings)
 	Sfx.ensure_buses(settings)
+	Profiles.ensure()
 
 	netplay = Netplay.new()
 	netplay.name = "Netplay"
@@ -176,6 +178,7 @@ func _ready() -> void:
 	menu_ui.name = "MainMenu"
 	menu_ui.play_pressed.connect(_enter_champ)
 	menu_ui.multi_pressed.connect(_enter_multi)
+	menu_ui.login_pressed.connect(_enter_profile)
 	menu_ui.shop_pressed.connect(func(): _enter_menushop(State.MENU))
 	menu_ui.settings_pressed.connect(_enter_settings)
 	menu_ui.exit_pressed.connect(func(): get_tree().quit())
@@ -207,6 +210,13 @@ func _ready() -> void:
 	touch_ui.main = self
 	touch_ui.visible = false
 	touch_layer.add_child(touch_ui)
+
+	profiles_ui = ProfilesMenu.new()
+	profiles_ui.name = "ProfilesMenu"
+	profiles_ui.back_pressed.connect(_enter_menu)
+	profiles_ui.picked.connect(_on_profile_picked)
+	profiles_ui.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	ui_root.add_child(profiles_ui)
 
 	_build_pause_ui(ui_root)
 	_build_gameover_ui(ui_root)
@@ -450,6 +460,7 @@ func _hide_all() -> void:
 	menu_ui.visible = false
 	settings_ui.visible = false
 	mult_ui.visible = false
+	profiles_ui.visible = false
 
 func _enter_menu() -> void:
 	state = State.MENU
@@ -531,6 +542,16 @@ func _enter_multi() -> void:
 	_hide_all()
 	mult_ui.visible = true
 	mult_ui.build_choice()
+
+func _enter_profile() -> void:
+	state = State.PROFILE
+	_hide_all()
+	profiles_ui.visible = true
+	profiles_ui.build()
+
+func _on_profile_picked() -> void:
+	progress = StageData.load_progress()
+	menu_ui.build(StageData.essence(progress))
 
 ## Zera a sessão do lobby (peers, prontos, inputs). Run não mexe aqui.
 func _reset_mp_session() -> void:
@@ -961,6 +982,7 @@ func _on_victory() -> void:
 		netplay.force_state.rpc(1)
 
 func _complete_wave() -> void:
+	wave_killed = maxi(wave_killed, wave_quota)
 	wave_active = false
 	if wave_idx >= StageData.WAVES_PER_STAGE - 1:
 		_on_victory()
@@ -1647,6 +1669,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			State.MULTI:
 				if key == KEY_ESCAPE:
 					_mp_lobby_back()
+				get_viewport().set_input_as_handled()
+			State.PROFILE:
+				if key == KEY_ESCAPE:
+					_enter_menu()
 				get_viewport().set_input_as_handled()
 			State.CHAMP:
 				if select_ui.handle_key(key):

@@ -62,3 +62,21 @@ static func find_free(world: World, pos: Vector2, max_ring := 8) -> Vector2:
 				if can_enter(world, cand):
 					return cand
 	return Vector2.INF
+
+## Fuga para trás: ponto livre a ~`rings` tiles na direção oposta ao
+## movimento (com aberturas laterais). Destrava sem pular para longe.
+static func find_free_behind(world: World, pos: Vector2, back_dir: Vector2, rings := 3) -> Vector2:
+	if world == null:
+		return Vector2.INF
+	var bd := back_dir.normalized()
+	if bd == Vector2.ZERO:
+		bd = Vector2(-1, 0)
+	var tile := float(World.TILE)
+	var perp := Vector2(-bd.y, bd.x)
+	for ring in range(1, rings + 1):
+		for side in [-1, 0, 1]:
+			var off := tile * float(side) * 0.75
+			var cand := pos + bd * (tile * ring) + perp * off
+			if can_enter(world, cand):
+				return cand
+	return Vector2.INF

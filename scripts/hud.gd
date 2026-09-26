@@ -225,10 +225,10 @@ func _draw_boss_bar(screen_w: float) -> void:
 
 # ---------------------------------------------------------------------
 func _draw_banner(screen_w: float, screen_h: float) -> void:
-	var t := float(main.get("wave_banner_t", 0.0))
+	var t: float = main.wave_banner_t
 	if t <= 0.0:
 		return
-	var txt := str(main.get("wave_banner_txt", ""))
+	var txt := str(main.wave_banner_txt)
 	if txt == "":
 		return
 	var font := ThemeDB.fallback_font

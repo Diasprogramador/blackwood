@@ -326,7 +326,12 @@ func _watch_unstick(d: float, pushing: bool) -> void:
 	if _unstick_stage == 1:
 		_nudge_side()
 	else:
-		var free := MoveHelper.find_free(world, position)
+		var bdir := Vector2(-1, 0)
+		if vel.length() > 1.0:
+			bdir = -vel.normalized()
+		var free := MoveHelper.find_free_behind(world, position, bdir, 3)
+		if free == Vector2.INF:
+			free = MoveHelper.find_free(world, position)
 		if free != Vector2.INF:
 			position = free
 		_unstick_stage = 0
