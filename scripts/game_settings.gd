@@ -35,7 +35,7 @@ static func default_data() -> Dictionary:
 	return {
 		"master": 80, "music": 70, "sfx": 90,
 		"fullscreen": false, "shake": true, "touch": 0,
-		"quality": 1, "touch_size": 1, "touch_side": 0,
+		"quality": 2 if OS.has_feature("mobile") else 1, "touch_size": 1, "touch_side": 0,
 		"hud_bar": true, "show_fps": false,
 		"keys": keys,
 	}

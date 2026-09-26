@@ -282,8 +282,10 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 
 # ---------------------------------------------------------------------
 func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
-	# Barra desligável (o touch já mostra os cooldowns).
+	# Barra desligável + some sozinha com touch (botões já mostram tudo).
 	if main.get("settings") != null and not bool(main.get("settings").get("hud_bar", true)):
+		return
+	if main.touch_ui != null and main.touch_ui.visible:
 		return
 	var box := 52.0
 	var gap := 6.0

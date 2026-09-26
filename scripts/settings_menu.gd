@@ -212,7 +212,7 @@ func _add_touch_row(parent: VBoxContainer) -> void:
 
 func _refresh_touch(b: Button) -> void:
 	var m := int(data.get("touch", 0))
-	b.text = ["Automático", "Sempre", "Nunca"][clampi(m, 0, 2)]
+	b.text = ["No celular", "Sempre", "Nunca"][clampi(m, 0, 2)]
 	MenuArt.apply_small_btn(b, Color(0.55, 0.85, 1), 14)
 
 func _add_key_row(parent: VBoxContainer, action_id: String, label: String) -> void:

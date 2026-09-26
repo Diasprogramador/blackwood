@@ -1366,7 +1366,8 @@ func touch_active() -> bool:
 		return true
 	if m == 2:
 		return false
-	return DisplayServer.is_touchscreen_available()
+	# Automático: só mobile (notebook com touch usa o layout de PC).
+	return OS.has_feature("mobile")
 
 func _update_touch() -> void:
 	if touch_ui == null:
