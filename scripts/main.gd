@@ -733,6 +733,7 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	progress = StageData.load_progress()
 	_clear_world()
 
+	world.stage_idx = cur_stage
 	world.generate(seed_value)
 	world.apply_stage(cur_stage)
 	minimap_tex = world.build_minimap_image()
@@ -2069,7 +2070,7 @@ func _spawn_minion(force_elite: bool = false) -> void:
 	net_id_counter += 1
 	e.world = world
 	e.stage_idx = cur_stage
-	e.setup(EnemyData.random_type(lvl), lvl, m)
+	e.setup(EnemyData.random_type(lvl, cur_stage), lvl, m)
 	e.position = pos
 	e.died.connect(_on_enemy_killed)
 	e.shoot.connect(_on_enemy_shoot)

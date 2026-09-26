@@ -81,6 +81,15 @@ func setup(type_key_p: String, lvl: int, mults: Dictionary = {}) -> void:
 	is_miniboss_flag = bool(mults.get("miniboss", false))
 	is_elite = bool(mults.get("elite", false))
 	base_color = td.color
+	# Fauna da fase: cor e nome mudam com o tema (chefões mantêm o nome).
+	if stage_idx == 1:
+		base_color = (td.color as Color).lerp(Color(1, 0.55, 0.25), 0.3)
+		if not is_boss():
+			type_name = "%s Chamuscado" % type_name
+	elif stage_idx == 2:
+		base_color = (td.color as Color).lerp(Color(0.7, 0.4, 1), 0.3)
+		if not is_boss():
+			type_name = "%s Corrompido" % type_name
 	dead = false
 	death_timer = -1.0
 	attack_cd = 0.0

@@ -17,6 +17,7 @@ var tiles: Array = []
 var _water_tiles: Array[Vector2i] = []
 var _rng := RandomNumberGenerator.new()
 var _time := 0.0
+var stage_idx := 0
 
 var ground: Node2D
 var water_fx: Node2D
@@ -65,6 +66,7 @@ func generate(seed_value: int = -1) -> void:
 	_carve_lakes()
 	_scatter_forests()
 	_build_border()
+	_connect_regions()
 
 	# limpa props anteriores
 	for c in props.get_children():
@@ -87,6 +89,25 @@ func generate(seed_value: int = -1) -> void:
 				props.add_child(rock)
 			elif t == T_WATER:
 				_water_tiles.append(Vector2i(x, y))
+
+	# decoração da fase (só visual, não bloqueia passagem)
+	for y in range(2, MAP_H - 2):
+		for x in range(2, MAP_W - 2):
+			if tiles[y][x] != T_GRASS:
+				continue
+			var roll := _rng.randf()
+			var dx := x * TILE + TILE / 2.0
+			var dy := y * TILE + TILE / 2.0 + 6.0
+			if stage_idx == 1 and roll < 0.035:
+				var emb := EmberProp.new()
+				emb.variant = _rng.randi_range(0, 5)
+				emb.position = Vector2(dx, dy)
+				props.add_child(emb)
+			elif stage_idx == 2 and roll < 0.035:
+				var cry := CrystalProp.new()
+				cry.variant = _rng.randi_range(0, 5)
+				cry.position = Vector2(dx, dy)
+				props.add_child(cry)
 
 	ground.queue_redraw()
 	water_fx.queue_redraw()
@@ -114,8 +135,8 @@ func _carve_paths() -> void:
 			if _in_bounds(x + 1, y) and tiles[y][x + 1] == T_GRASS:
 				tiles[y][x + 1] = T_PATH
 
-	# trilhas serpenteantes saindo do centro
-	var trail_count := 8
+	# trilhas serpenteantes saindo do centro (mais rotas, mais largas)
+	var trail_count := 10
 	for i in trail_count:
 		var angle := TAU * i / trail_count + _rng.randf_range(-0.3, 0.3)
 		var x := cx + int(cos(angle) * 4)
@@ -135,17 +156,21 @@ func _carve_paths() -> void:
 				break
 			if tiles[y][x] != T_WATER:
 				tiles[y][x] = T_PATH
-				# largura 2 às vezes
-				if _rng.randf() < 0.45:
+				# largura 2 quase sempre (sem corredor apertado)
+				if _rng.randf() < 0.7:
 					var nx := x + (1 if _rng.randf() < 0.5 else -1)
 					if _in_bounds(nx, y) and tiles[y][nx] == T_GRASS:
 						tiles[y][nx] = T_PATH
+				if _rng.randf() < 0.3:
+					var ny := y + (1 if _rng.randf() < 0.5 else -1)
+					if _in_bounds(x, ny) and tiles[ny][x] == T_GRASS:
+						tiles[ny][x] = T_PATH
 
 func _carve_lakes() -> void:
-	for i in 5:
-		var lx := _rng.randi_range(6, MAP_W - 7)
-		var ly := _rng.randi_range(6, MAP_H - 7)
-		var size := _rng.randi_range(10, 28)
+	for i in 4:
+		var lx := _rng.randi_range(8, MAP_W - 9)
+		var ly := _rng.randi_range(8, MAP_H - 9)
+		var size := _rng.randi_range(8, 20)
 		var x := lx
 		var y := ly
 		var angle := _rng.randf() * TAU
@@ -160,15 +185,23 @@ func _carve_lakes() -> void:
 					var nx := x + dx
 					var ny := y + dy
 					if _in_bounds(nx, ny) and tiles[ny][nx] == T_GRASS:
-						if absi(nx - int(MAP_W / 2.0)) > 4 or absi(ny - int(MAP_H / 2.0)) > 4:
+						if absi(nx - int(MAP_W / 2.0)) > 7 or absi(ny - int(MAP_H / 2.0)) > 7:
 							tiles[ny][nx] = T_WATER
 
 func _scatter_forests() -> void:
-	# aglomerados de árvores (manchas de floresta)
-	for i in 14:
+	# aglomerados de árvores (menos e menores fora da floresta)
+	var clusters := 14
+	var max_radius := 6
+	if stage_idx == 1:
+		clusters = 6
+		max_radius = 4
+	elif stage_idx == 2:
+		clusters = 8
+		max_radius = 4
+	for i in clusters:
 		var fx := _rng.randi_range(4, MAP_W - 5)
 		var fy := _rng.randi_range(4, MAP_H - 5)
-		var radius := _rng.randi_range(3, 6)
+		var radius := _rng.randi_range(2, max_radius)
 		for y in range(fy - radius, fy + radius + 1):
 			for x in range(fx - radius, fx + radius + 1):
 				if not _in_bounds(x, y):
@@ -185,13 +218,13 @@ func _scatter_forests() -> void:
 	# pedras esparsas
 	for y in range(2, MAP_H - 2):
 		for x in range(2, MAP_W - 2):
-			if tiles[y][x] == T_GRASS and _rng.randf() < 0.02:
+			if tiles[y][x] == T_GRASS and _rng.randf() < 0.012:
 				tiles[y][x] = T_ROCK
 
 	# some com ilhas de árvore/pedra sem grama vizinha (polimento rápido)
 	for y in range(1, MAP_H - 1):
 		for x in range(1, MAP_W - 1):
-			if tiles[y][x] == T_GRASS and _rng.randf() < 0.008:
+			if tiles[y][x] == T_GRASS and _rng.randf() < 0.005:
 				tiles[y][x] = T_ROCK
 
 func _build_border() -> void:
@@ -212,6 +245,69 @@ func _build_border() -> void:
 			if x == 0 or y == 0 or x == MAP_W - 1 or y == MAP_H - 1:
 				if tiles[y][x] == T_GRASS or tiles[y][x] == T_PATH:
 					tiles[y][x] = T_ROCK
+
+## Garante rota de fuga: toda região andável isolada ganha um corredor
+## 2x2 até a região principal (adeus becos em "C" sem saída).
+func _connect_regions() -> void:
+	var guard := 0
+	while guard < 12:
+		guard += 1
+		var main_region := _flood(Vector2i(MAP_W / 2, MAP_H / 2))
+		var target := Vector2i(-1, -1)
+		for y in range(2, MAP_H - 2):
+			for x in range(2, MAP_W - 2):
+				if not is_solid_tile(x, y) and not main_region.has(Vector2i(x, y)):
+					target = Vector2i(x, y)
+					break
+			if target.x >= 0:
+				break
+		if target.x < 0:
+			return
+		var best := Vector2i(MAP_W / 2, MAP_H / 2)
+		var best_d := 1e18
+		for c in main_region.keys():
+			var dd := Vector2(c - target).length_squared()
+			if dd < best_d:
+				best_d = dd
+				best = c
+		_carve_corridor(target, best)
+
+func _flood(start: Vector2i) -> Dictionary:
+	if is_solid_tile(start.x, start.y):
+		return {}
+	var seen := {}
+	var stack := [start]
+	seen[start] = true
+	while not stack.is_empty():
+		var c: Vector2i = stack.pop_back()
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := c + d
+			if n.x < 2 or n.y < 2 or n.x >= MAP_W - 2 or n.y >= MAP_H - 2:
+				continue
+			if seen.has(n) or is_solid_tile(n.x, n.y):
+				continue
+			seen[n] = true
+			stack.append(n)
+	return seen
+
+func _carve_corridor(a: Vector2i, b: Vector2i) -> void:
+	var x := a.x
+	var y := a.y
+	while x != b.x:
+		_set_path_area(x, y)
+		x += 1 if b.x > x else -1
+	while y != b.y:
+		_set_path_area(x, y)
+		y += 1 if b.y > y else -1
+	_set_path_area(x, y)
+
+func _set_path_area(x: int, y: int) -> void:
+	for dy in range(0, 2):
+		for dx in range(0, 2):
+			var nx := x + dx
+			var ny := y + dy
+			if nx >= 2 and ny >= 2 and nx < MAP_W - 2 and ny < MAP_H - 2:
+				tiles[ny][nx] = T_PATH
 
 # ---------------------------------------------------------------------
 #  COLISÃO / HELPERS

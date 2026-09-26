@@ -47,6 +47,35 @@ static func pool_for_level(lvl: int) -> Array:
 		pool.append("MINION")
 	return pool
 
-static func random_type(lvl: int) -> String:
+static func random_type(lvl: int, stage: int = -1) -> String:
 	var pool := pool_for_level(lvl)
-	return str(pool[randi() % pool.size()])
+	if stage < 0:
+		return str(pool[randi() % pool.size()])
+	# Cada fase tem sua fauna (pesos por tipo).
+	var weights := {
+		"MINION": 2, "CASTER": 2, "GOLEM": 1,
+		"JUNGLE": 2, "DRAGON": 1, "BARON": 1,
+	}
+	if stage == 1:
+		weights = {
+			"MINION": 2, "CASTER": 2, "GOLEM": 3,
+			"JUNGLE": 1, "DRAGON": 2, "BARON": 1,
+		}
+	elif stage == 2:
+		weights = {
+			"MINION": 1, "CASTER": 3, "GOLEM": 2,
+			"JUNGLE": 1, "DRAGON": 2, "BARON": 2,
+		}
+	elif stage == 0:
+		weights = {
+			"MINION": 3, "CASTER": 2, "GOLEM": 1,
+			"JUNGLE": 3, "DRAGON": 1, "BARON": 1,
+		}
+	var bag := []
+	for key in pool:
+		var w := int(weights.get(key, 1))
+		for i in w:
+			bag.append(key)
+	if bag.is_empty():
+		return str(pool[randi() % pool.size()])
+	return str(bag[randi() % bag.size()])

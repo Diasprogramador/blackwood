@@ -70,6 +70,33 @@ func _grass_detail(px: int, py: int, h: int) -> void:
 		var mx := px + (h * 13) % TILE
 		var my := py + (h * 17) % TILE
 		ArtUtil.fill_ellipse(self, mx, my, 6, 4, Color(0.22, 0.5, 0.2, 0.35))
+	_stage_detail(px, py, h)
+
+## Detalhe exclusivo da fase (identidade do mapa).
+func _stage_detail(px: int, py: int, h: int) -> void:
+	var TILE := World.TILE
+	var st := 0
+	if world != null:
+		st = int(world.stage_idx)
+	if st == 1:
+		# Terra Queimada: cinzas e rachaduras.
+		if h % 3 == 0:
+			var ax := px + (h * 7) % (TILE - 6) + 3
+			var ay := py + (h * 11) % (TILE - 6) + 3
+			draw_circle(Vector2(ax, ay), 1.8, Color(0.45, 0.42, 0.4, 0.7))
+		if h % 9 == 4:
+			var cx := px + 6
+			draw_line(Vector2(cx, py + 4), Vector2(cx + 8, py + TILE - 6),
+				Color(0.1, 0.07, 0.06, 0.8), 1.5)
+			draw_line(Vector2(cx + 8, py + 12), Vector2(cx + 14, py + 20),
+				Color(0.1, 0.07, 0.06, 0.6), 1.0)
+	elif st == 2:
+		# Vazio: veios brilhantes no chão.
+		if h % 4 == 0:
+			var vx := px + (h * 5) % (TILE - 6) + 3
+			var vy := py + (h * 9) % (TILE - 6) + 3
+			draw_circle(Vector2(vx, vy), 1.6, Color(0.7, 0.4, 1, 0.55))
+			draw_circle(Vector2(vx + 6, vy + 4), 1.1, Color(0.55, 0.8, 1, 0.45))
 
 func _path_tile(px: int, py: int, x: int, y: int, h: int) -> void:
 	var TILE := World.TILE
