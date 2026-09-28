@@ -185,7 +185,7 @@ func _check_update() -> void:
 	_http.timeout = 8
 	add_child(_http)
 	_http.request_completed.connect(_on_update_checked)
-	_http.request("https://api.github.com/Diasprogramador/blackwood/releases/latest")
+	_http.request("https://api.github.com/repos/Diasprogramador/blackwood/releases/latest")
 
 func _on_update_checked(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if code != 200 or body.is_empty() or _update_btn == null:
