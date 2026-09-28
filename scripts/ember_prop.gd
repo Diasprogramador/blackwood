@@ -5,8 +5,20 @@ extends Node2D
 ## Decorativo (não bloqueia). Posição = base do prop.
 
 var variant := 0
+var _t := 0.0
 
 func _ready() -> void:
+	queue_redraw()
+
+## As fendas são avaliadas no _draw: sem repintar, o sin() roda uma única vez
+## e o brilho fica congelado. Repinta a 12Hz — o fogo não precisa de 60.
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	_t += delta
+	if _t < 0.083:
+		return
+	_t = 0.0
 	queue_redraw()
 
 func _draw() -> void:
@@ -15,13 +27,16 @@ func _draw() -> void:
 	var w := 9.0 + v * 1.5
 
 	A.fill_ellipse(self, 0, 4, w + 2, 4, Color(0, 0, 0, 0.3))
+	# halo de calor: sem isso a brasa parece um desenho colado no chão.
+	var glow := 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.004 + variant)
+	A.fill_ellipse(self, 0, -2, w + 10, w * 0.8 + 7,
+		Color(1, 0.5, 0.14, 0.09 + 0.07 * glow))
 	var body := PackedVector2Array([
 		Vector2(-w, 4), Vector2(-w * 0.7, -4), Vector2(-w * 0.2, -7),
 		Vector2(w * 0.4, -6), Vector2(w * 0.9, -2), Vector2(w, 4),
 	])
 	A.shade_poly(self, body, Color(0.32, 0.26, 0.24), Color(0.12, 0.09, 0.09))
 	# fendas acesas
-	var glow := 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.004 + variant)
 	var fire := Color(1, 0.45 + 0.15 * glow, 0.1, 0.75 + 0.25 * glow)
 	draw_line(Vector2(-w * 0.4, 2), Vector2(-w * 0.1, -4), fire, 1.6)
 	draw_line(Vector2(w * 0.2, 3), Vector2(w * 0.3, -3), fire, 1.3)

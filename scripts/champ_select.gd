@@ -29,18 +29,20 @@ class Portrait extends Control:
 	func _draw() -> void:
 		var bob := sin(tick * 0.08) * 3.0
 		var cx := size.x / 2.0
+		# Centro/altura vem do Control: a VBox estica o retrato, e o 56 fixo
+		# deixava o sprite descolado (e estourando) quando o card crescia.
+		var cy := size.y * 0.5
 		if active:
 			var aura := 44.0 + sin(tick * 0.1) * 7.0
-			draw_circle(Vector2(cx, 48), aura, Color(accent.r, accent.g, accent.b, 0.25))
+			draw_circle(Vector2(cx, cy), aura, Color(accent.r, accent.g, accent.b, 0.25))
 		if tex != null:
 			var tw := float(tex.get_width())
 			var th := float(tex.get_height())
-			var sc := minf(size.x / tw, 118.0 / th)
+			var sc := minf(size.x / tw, maxf(40.0, size.y - 8.0) / th)
 			var dw := tw * sc
 			var dh := th * sc
-			draw_texture_rect(tex, Rect2(cx - dw / 2.0, 56.0 - dh / 2.0 + bob, dw, dh), false)
+			draw_texture_rect(tex, Rect2(cx - dw / 2.0, cy - dh / 2.0 + bob, dw, dh), false)
 			return
-		var cy := 60.0
 		var bobi := int(bob)
 		draw_set_transform(Vector2(cx, cy), 0, Vector2.ONE)
 		ChampionArt.draw_champion(self, role, bobi, false, tick * 0.08, false, 0.0)
@@ -70,6 +72,7 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	progress = prog
 	selected_index = clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_cards.clear()
 	_portraits.clear()
@@ -282,14 +285,15 @@ func _confirm() -> void:
 	Sfx.play(self, "click")
 	chosen.emit(selected_index)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not visible:
 		return
-	_tick += 1.0
-	for p in _portraits:
-		p.tick = _tick
-		p.queue_redraw()
-	queue_redraw()
+	var r := MenuArt.back_tick(self, delta, _tick)
+	_tick = r[0]
+	if r[1]:
+		for p in _portraits:
+			p.tick = _tick
+			p.queue_redraw()
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)
@@ -300,8 +304,8 @@ func handle_key(key: int) -> bool:
 		_step(-1)
 	elif key == KEY_RIGHT or key == KEY_D:
 		_step(1)
-	elif key >= KEY_1 and key <= KEY_5:
-		selected_index = key - KEY_1
+	elif key >= KEY_1 and key <= KEY_1 + ChampData.CHAMPS.size() - 1:
+		selected_index = clampi(key - KEY_1, 0, ChampData.CHAMPS.size() - 1)
 	elif key == KEY_ENTER or key == KEY_KP_ENTER:
 		_confirm()
 		return true

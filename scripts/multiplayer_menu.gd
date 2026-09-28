@@ -188,6 +188,7 @@ func _back_btn() -> CenterContainer:
 
 func _clear() -> void:
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_status = null
 	_ip_edit = null

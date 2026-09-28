@@ -17,6 +17,7 @@ func build(d: Dictionary) -> void:
 	data = d
 	_capturing = ""
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_rows.clear()
 
@@ -57,6 +58,8 @@ func build(d: Dictionary) -> void:
 
 	_add_section(box, "— VÍDEO —")
 	_add_toggle(box, "Tela cheia", "fullscreen")
+	_add_toggle(box, "VSync", "vsync")
+	_add_fps_row(box)
 	_add_toggle(box, "Tremor de tela", "shake")
 	_add_touch_row(box)
 	_add_cycle(box, "Qualidade", "quality", ["Alta", "Média", "Baixa"])
@@ -148,7 +151,7 @@ func _add_toggle(parent: VBoxContainer, label: String, key: String) -> void:
 	tgl.pressed.connect(func():
 		data[key] = not bool(data.get(key, false))
 		GameSettings.save_data(data)
-		if key == "fullscreen":
+		if key == "fullscreen" or key == "vsync":
 			GameSettings.apply_video(data)
 		Sfx.play(self, "click")
 		_refresh_toggle(tgl, key)
@@ -186,6 +189,39 @@ func _add_cycle(parent: VBoxContainer, label: String, key: String, options: Arra
 func _refresh_cycle(b: Button, key: String, options: Array) -> void:
 	var idx := clampi(int(data.get(key, 0)), 0, maxi(0, options.size() - 1))
 	b.text = str(options[idx])
+	MenuArt.apply_small_btn(b, Color(0.55, 0.85, 1), 14)
+
+## Teto de FPS: valores reais (60/120/0), não índice — 0 = sem limite.
+const FPS_VALUES := [60, 120, 0]
+const FPS_LABELS := ["60 FPS", "120 FPS", "Sem limite"]
+
+func _add_fps_row(parent: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = "Limite de FPS"
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", MenuArt.CREAM)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(l)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(170, 32)
+	_refresh_fps(b)
+	row.add_child(b)
+	b.pressed.connect(func():
+		var idx := FPS_VALUES.find(clampi(int(data.get("fps_limit", 60)), 0, 1000))
+		data["fps_limit"] = FPS_VALUES[(maxi(0, idx) + 1) % FPS_VALUES.size()]
+		GameSettings.save_data(data)
+		GameSettings.apply_video(data)
+		Sfx.play(self, "click")
+		_refresh_fps(b)
+	)
+
+func _refresh_fps(b: Button) -> void:
+	var idx := FPS_VALUES.find(clampi(int(data.get("fps_limit", 60)), 0, 1000))
+	b.text = str(FPS_LABELS[maxi(0, idx)])
 	MenuArt.apply_small_btn(b, Color(0.55, 0.85, 1), 14)
 
 func _add_touch_row(parent: VBoxContainer) -> void:
@@ -268,11 +304,10 @@ func _input(event: InputEvent) -> void:
 		Sfx.play(self, "click")
 		get_viewport().set_input_as_handled()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not visible:
 		return
-	_tick += 1.0
-	queue_redraw()
+	_tick = MenuArt.back_tick(self, delta, _tick)[0]
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)

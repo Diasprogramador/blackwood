@@ -15,6 +15,7 @@ func _ready() -> void:
 
 func build() -> void:
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_content = null
 	_name_edit = null

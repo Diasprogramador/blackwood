@@ -35,8 +35,11 @@ func _process(delta: float) -> void:
 			messages.remove_at(i)
 		i -= 1
 	# Fora da qualidade Alta, redesenha a 30Hz (barras e cooldowns suaves).
+	# Nada de queue_redraw vindo de fora: quem manda no ritmo é este throttle.
+	if not visible:
+		return
 	_redraw_t += delta
-	var interval := 1.0 / 30.0 if GameSettings.quality_cache >= 1 else 1.0 / 60.0
+	var interval := 1.0 / 60.0 if GameSettings.quality_cache <= 0 else 1.0 / 30.0
 	if _redraw_t >= interval:
 		_redraw_t = 0.0
 		queue_redraw()
@@ -63,9 +66,14 @@ func _draw_top_left(p: Player) -> void:
 	var x := 12.0
 	var y := 12.0
 	var bw := 250.0
+	# A linha de canalização é extra: sem crescer o cartão ela caía FORA dele
+	# e batia no painel do primeiro aliado.
+	var card_h := 94.0
+	if p.channeling:
+		card_h = 116.0
 
-	ArtUtil.fill_rrect(self, x - 6, y - 6, bw + 12, 94, 8, Color(0, 0, 0, 0.66))
-	ArtUtil.stroke_rrect(self, x - 6, y - 6, bw + 12, 94, 8, Color(1, 1, 1, 0.18), 1)
+	ArtUtil.fill_rrect(self, x - 6, y - 6, bw + 12, card_h, 8, Color(0, 0, 0, 0.66))
+	ArtUtil.stroke_rrect(self, x - 6, y - 6, bw + 12, card_h, 8, Color(1, 1, 1, 0.18), 1)
 
 	var font := ThemeDB.fallback_font
 	var label := "%s  •  Lv.%d  •  %s" % [p.champ_name, p.level, ChampData.ROLES[p.role].display]
@@ -89,7 +97,11 @@ func _draw_top_left(p: Player) -> void:
 	draw_string(font, Vector2(x + 148, y + 80), "%d" % bank,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.85, 1))
 
-	# Aliados co-op (P2..P4 compactos).
+	if p.channeling:
+		draw_string(font, Vector2(x, y + 106), "✦ CANALIZANDO — você está enraizado! ✦",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.55, 0.78, 1))
+
+	# Aliados co-op (P2..P4 compactos), ancorados no RODAPÉ do cartão.
 	if main.get("allies") != null:
 		var idx := 0
 		for q in (main.get("allies") as Array):
@@ -97,7 +109,7 @@ func _draw_top_left(p: Player) -> void:
 			if q == null or not is_instance_valid(q):
 				continue
 			var qp: Player = q
-			var ay := y + 96.0 + float(idx - 1) * 42.0
+			var ay := y + card_h + 2.0 + float(idx - 1) * 42.0
 			ArtUtil.fill_rrect(self, x - 6, ay - 6, bw + 12, 40, 8, Color(0, 0, 0, 0.66))
 			ArtUtil.stroke_rrect(self, x - 6, ay - 6, bw + 12, 40, 8, Color(0.4, 0.9, 1, 0.5), 1)
 			draw_string(font, Vector2(x, ay + 10), "P%d %s  •  Lv.%d" % [idx + 1, qp.champ_name, qp.level],
@@ -108,10 +120,6 @@ func _draw_top_left(p: Player) -> void:
 			var mr := clampf(float(qp.mana) / float(maxi(1, qp.max_mana)), 0.0, 1.0)
 			draw_rect(Rect2(x, ay + 25, bw, 5), Color(0, 0, 0, 0.85))
 			draw_rect(Rect2(x, ay + 25, bw * mr, 5), Color(0.27, 0.51, 1))
-
-	if p.channeling:
-		draw_string(font, Vector2(x, y + 93), "✦ CANALIZANDO — você está enraizado! ✦",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.55, 0.78, 1))
 
 func _bar(x: float, y: float, w: float, h: float, cur: int, mx: int,
 		col: Color, caption: String, fsize: int) -> void:
@@ -162,23 +170,27 @@ func _draw_wave_banner(screen_w: float) -> void:
 	var ss := secs % 60
 	var txt := "☠ %d   ⏱ %02d:%02d" % [main.kill_count, mm, ss]
 	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-	var x := screen_w / 2.0 - 90
-	ArtUtil.fill_rrect(self, x, 10, 180, 52, 8, Color(0, 0, 0, 0.62))
+	var tw2 := font.get_string_size(wave_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+	# A caixa tinha 180 fixo: "Floresta Verde 3/5 • Difícil • 12/15" passa
+	# de 200px e o texto vazava para fora do fundo.
+	var bw2 := maxf(180.0, maxf(tw, tw2) + 26.0)
+	var x := screen_w / 2.0 - bw2 / 2.0
+	ArtUtil.fill_rrect(self, x, 10, bw2, 52, 8, Color(0, 0, 0, 0.62))
 	draw_string(font, Vector2(screen_w / 2.0 - tw / 2, 28), txt,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
-	var tw2 := font.get_string_size(wave_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	draw_string(font, Vector2(screen_w / 2.0 - tw2 / 2, 44), wave_txt,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, diff_col)
 	# Barra de progresso da onda.
-	draw_rect(Rect2(x + 12, 48, 156, 6), Color(0, 0, 0, 0.8))
-	draw_rect(Rect2(x + 12, 48, 156 * prog, 6), diff_col)
-	draw_rect(Rect2(x + 12, 48, 156, 6), Color(1, 1, 1, 0.35), false, 1.0)
+	draw_rect(Rect2(x + 12, 48, bw2 - 24, 6), Color(0, 0, 0, 0.8))
+	draw_rect(Rect2(x + 12, 48, (bw2 - 24) * prog, 6), diff_col)
+	draw_rect(Rect2(x + 12, 48, bw2 - 24, 6), Color(1, 1, 1, 0.35), false, 1.0)
+	_draw_skip_hint(screen_w, font)
 	_draw_boss_bar(screen_w)
 	if boss_alive:
 		var pulse := sin(Time.get_ticks_msec() * 0.012) * 0.5 + 0.5
 		var warn := "★ BOSS NA ARENA ★"
 		var tww := font.get_string_size(warn, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
-		var wy := 78.0
+		var wy := 148.0
 		ArtUtil.fill_rrect(self, screen_w / 2.0 - tww / 2 - 10, wy - 15, tww + 20, 22, 8,
 			Color(0.45, 0.05, 0.1, 0.55 + 0.3 * pulse))
 		draw_string(font, Vector2(screen_w / 2.0 - tww / 2, wy), warn,
@@ -187,13 +199,34 @@ func _draw_wave_banner(screen_w: float) -> void:
 		var pulse := sin(Time.get_ticks_msec() * 0.012) * 0.5 + 0.5
 		var warn := "👹 MINI-BOSS NA ARENA"
 		var tww := font.get_string_size(warn, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		var wy := 78.0
+		var wy := 148.0
 		ArtUtil.fill_rrect(self, screen_w / 2.0 - tww / 2 - 10, wy - 15, tww + 20, 22, 8,
 			Color(0.4, 0.15, 0.03, 0.55 + 0.3 * pulse))
 		draw_string(font, Vector2(screen_w / 2.0 - tww / 2, wy), warn,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.55 + 0.25 * pulse, 0.25))
 
 # ---------------------------------------------------------------------
+func _draw_skip_hint(screen_w: float, font: Font) -> void:
+	# Mostra quando o pulo de onda libera (50% da cota).
+	if main == null or not main.has_method("can_skip_wave"):
+		return
+	if not bool(main.get("wave_active")):
+		return
+	var quota := int(main.get("wave_quota"))
+	if quota <= 0:
+		return
+	var txt := ""
+	var col := Color(1, 0.85, 0.2, 0.9)
+	if bool(main.can_skip_wave()):
+		txt = "⏭ %s = pular onda!" % _key("skip")
+	else:
+		var need := maxi(0, int(main.skip_threshold()) - int(main.get("wave_killed")))
+		txt = "⏭ pular em %d kills" % need
+		col = Color(1, 1, 1, 0.55)
+	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+	draw_string(font, Vector2(screen_w / 2.0 - tw / 2, 73), txt,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
+
 func _draw_boss_bar(screen_w: float) -> void:
 	# Maior ameaça viva (boss primeiro, senão mini-boss).
 	var foe = null
@@ -260,7 +293,8 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 	for e in main.enemies:
 		if not is_instance_valid(e) or not e.is_alive():
 			continue
-		var pos := Vector2(mx + e.position.x * sx, my + e.position.y * sy)
+		# Sem clamp os pontinhos vazavam por cima da moldura e da tela.
+		var pos := _mm_clamp(Vector2(mx + e.position.x * sx, my + e.position.y * sy), mx, my, mm)
 		if e.is_boss():
 			draw_circle(pos, 4.5, Color(0.85, 0.2, 0.95))
 			draw_arc(pos, 4.5, 0, TAU, 12, Color(1, 0.85, 0.3), 1.5)
@@ -272,13 +306,18 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 		else:
 			draw_circle(pos, 2.5, Color(1, 0.25, 0.2))
 
-	draw_circle(Vector2(mx + p.position.x * sx, my + p.position.y * sy), 3.5, Color.WHITE)
+	draw_circle(_mm_clamp(Vector2(mx + p.position.x * sx, my + p.position.y * sy), mx, my, mm),
+		3.5, Color.WHITE)
 	if main.get("allies") != null:
 		for q2 in (main.get("allies") as Array):
 			if q2 != null and is_instance_valid(q2) and (q2 as Player).is_alive():
 				var qp: Player = q2
-				draw_circle(Vector2(mx + qp.position.x * sx, my + qp.position.y * sy), 3.5, Color(0.4, 0.9, 1))
+				draw_circle(_mm_clamp(Vector2(mx + qp.position.x * sx, my + qp.position.y * sy),
+					mx, my, mm), 3.5, Color(0.4, 0.9, 1))
 	ArtUtil.stroke_rrect(self, mx - 4, my - 4, mm + 8, mm + 8, 8, Color(0.5, 0.5, 0.5), 1)
+
+func _mm_clamp(p: Vector2, mx: float, my: float, mm: float) -> Vector2:
+	return Vector2(clampf(p.x, mx + 4.0, mx + mm - 4.0), clampf(p.y, my + 4.0, my + mm - 4.0))
 
 # ---------------------------------------------------------------------
 func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
@@ -293,7 +332,9 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 	var shown_locked := maxi(0, max_slots - p.skills.size())
 	var total := 1 + p.skills.size() + shown_locked
 	var start_x := screen_w / 2.0 - (total * (box + gap) - gap) / 2.0
-	var y := screen_h - box - 14
+	# Deixa folga para a linha de atalhos do rodapé: com -14 o fundo da barra
+	# terminava em screen_h-4 e tapava o texto.
+	var y := screen_h - box - 34
 	var font := ThemeDB.fallback_font
 
 	ArtUtil.fill_rrect(self, start_x - 10, y - 10,
@@ -301,41 +342,32 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 
 	# slot ataque básico
 	var ready_a := p.attack_cd <= 0.0 and not p.channeling
-	ArtUtil.fill_rrect(self, start_x, y, box, box, 6,
-		Color(0.24, 0.24, 0.12) if ready_a else Color(0.16, 0.12, 0.12))
-	ArtUtil.stroke_rrect(self, start_x, y, box, box, 6,
-		Color(1, 0.85, 0.2) if ready_a else Color(0.5, 0.5, 0.5), 2.0 if ready_a else 1.5)
+	SkillIcon.draw_slot_bg(self, start_x, y, box, box,
+		Color(1, 0.85, 0.2), ready_a, Color(1, 0.86, 0.32))
 	var atk_col := Color(1, 0.86, 0.32) if ready_a else Color(0.47, 0.47, 0.47)
 	_center_str("ATK", start_x, box, y + 12, 10, atk_col, font)
 	SkillIcon.draw_basic(self, p.role, Vector2(start_x + box / 2.0, y + box / 2.0 + 3), 13.0, ready_a)
 	_center_str(_key("attack"), start_x, box, y + box - 5, 10, Color(1, 0.85, 0.2), font)
 	if p.attack_cd > 0.0:
-		var ratio := clampf(p.attack_cd / (22.0 / 60.0), 0.0, 1.0)
+		var ratio := clampf(p.attack_cd / Player.ATTACK_CD, 0.0, 1.0)
 		var ch := box * ratio
 		draw_rect(Rect2(start_x, y, box, ch), Color(0, 0, 0, 0.67))
 		draw_rect(Rect2(start_x, y + ch - 1, box, 1), Color(1, 1, 0.4, 0.7))
 		_center_str("%.1f" % p.attack_cd, start_x, box, y + box / 2 + 5, 14, Color.WHITE, font)
 
-	# skills desbloqueadas (ícone + borda na cor da raridade)
+	# skills desbloqueadas (placa com gradiente + borda na cor da raridade)
 	for i in p.skills.size():
 		var s: Dictionary = p.skills[i]
 		var cfg: Dictionary = s.cfg
 		var bx := start_x + (i + 1) * (box + gap)
 		var can: bool = s.cd_left <= 0.0 and p.mana >= cfg.mana
 		var rcol := ChampData.rarity_color(int(cfg.get("rarity", 0)))
-		ArtUtil.fill_rrect(self, bx, y, box, box, 6,
-			Color(0.16, 0.24, 0.16) if can else Color(0.16, 0.12, 0.12))
-		var bw := 2.0 if can else 1.5
 		var bcol: Color = rcol if can else Color(0.5, 0.5, 0.5)
 		if can and int(cfg.get("rarity", 0)) >= 4:
 			var upulse := sin(Time.get_ticks_msec() * 0.008) * 0.5 + 0.5
 			bcol = Color(1, 0.85, 0.3, 0.6 + 0.4 * upulse)
-			bw = 3.0
-		ArtUtil.stroke_rrect(self, bx, y, box, box, 6, bcol, bw)
+		SkillIcon.draw_slot_bg(self, bx, y, box, box, bcol, can, rcol)
 		var center := Vector2(bx + box / 2.0, y + box / 2.0 + 2)
-		if can:
-			var gpulse := sin(Time.get_ticks_msec() * 0.006 + i) * 0.5 + 0.5
-			draw_circle(center, 17.0 + gpulse * 2.0, Color(rcol, 0.16))
 		SkillIcon.draw_icon(self, p.role, str(cfg.get("kind", "damage")), i, center, 13.0, not can)
 		draw_string(font, Vector2(bx + 4, y + 12), str(i + 1),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 0.85, 0.2))
@@ -378,13 +410,20 @@ func _draw_controls(p: Player, screen_h: float) -> void:
 		txt = "✦ CANALIZANDO — você está PARADO! Pressione %s para sair ✦" % _key("channel")
 		col = Color(0.55, 0.78, 1, 0.85)
 	else:
-		txt = "%s: mover | %s: soco | 1-%d: skills | %s: mana | %s: item | %s: loja | %s: pausa" % [
+		txt = "%s: mover | %s: soco | 1-%d: skills | %s: mana | %s: item | %s: loja | %s: pausa | %s: pular (50%%)" % [
 			_key("move_up").to_upper() + _key("move_left").to_upper() + _key("move_down").to_upper() + _key("move_right").to_upper(),
-			_key("attack"), maxi(1, p.skills.size()), _key("channel"), _key("item"), _key("shop"), _key("pause")]
+			_key("attack"), maxi(1, p.skills.size()), _key("channel"), _key("item"), _key("shop"), _key("pause"), _key("skip")]
 		col = Color(1, 1, 1, 0.5)
-	draw_string(font, Vector2(14, screen_h - 6), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
+	# Encaixa na largura da tela: sem isso a linha estourava a borda direita
+	# em resoluções estreitas (draw_string não quebra linha sozinho).
+	var fsize := 11
+	var avail := size.x - 28.0
+	while fsize > 8 and font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x > avail:
+		fsize -= 1
+	draw_string(font, Vector2(14, screen_h - 6), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 ## Vinheta vermelha pulsante quando o HP está baixo.
+## Moldura contínua (16 camadas finas) em vez de 4 barras chapadas de 10px.
 func _draw_vignette(p: Player, w: float, h: float) -> void:
 	if p.max_hp <= 0:
 		return
@@ -392,20 +431,18 @@ func _draw_vignette(p: Player, w: float, h: float) -> void:
 	if ratio >= 0.35:
 		return
 	var pulse := sin(Time.get_ticks_msec() * 0.009) * 0.5 + 0.5
-	var a := (0.35 - ratio) / 0.35 * (0.25 + 0.35 * pulse)
-	var t := 10.0
-	var col := Color(0.8, 0.05, 0.1, a)
-	draw_rect(Rect2(0, 0, w, t), col)
-	draw_rect(Rect2(0, h - t, w, t), col)
-	draw_rect(Rect2(0, 0, t, h), col)
-	draw_rect(Rect2(w - t, 0, t, h), col)
+	var a := (0.35 - ratio) / 0.35 * (0.22 + 0.30 * pulse)
+	ArtUtil.frame_vignette(self, Vector2(w, h), 52.0, Color(0.8, 0.05, 0.1), a, 16)
 
 ## Cantinho de FPS (ativável nas configurações).
 func _draw_fps(w: float) -> void:
 	if main.get("settings") == null or not bool(main.get("settings").get("show_fps", false)):
 		return
 	var font := ThemeDB.fallback_font
-	draw_string(font, Vector2(w - 86, 170), "%d FPS" % Engine.get_frames_per_second(),
+	var txt := "%d FPS" % Engine.get_frames_per_second()
+	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+	# Alinhado à direita da moldura do minimapa (o valor cresce e encolhe).
+	draw_string(font, Vector2(w - 16 - tw, 170), txt,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
 
 func _key(action_id: String) -> String:

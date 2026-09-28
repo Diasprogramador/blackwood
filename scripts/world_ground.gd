@@ -97,6 +97,22 @@ func _stage_detail(px: int, py: int, h: int) -> void:
 			var vy := py + (h * 9) % (TILE - 6) + 3
 			draw_circle(Vector2(vx, vy), 1.6, Color(0.7, 0.4, 1, 0.55))
 			draw_circle(Vector2(vx + 6, vy + 4), 1.1, Color(0.55, 0.8, 1, 0.45))
+	else:
+		# Floresta Verde: a fase inicial não tinha NENHUM detalhe próprio —
+		# chão de mata com folhas caídas, musgo e cogumelos.
+		if h % 6 == 0:
+			var lx := px + (h * 5) % (TILE - 6) + 3
+			var ly := py + (h * 9) % (TILE - 6) + 3
+			ArtUtil.fill_ellipse(self, lx, ly, 2.6, 1.5, Color(0.64, 0.42, 0.16, 0.7))
+		if h % 9 == 3:
+			var mx := px + (h * 11) % (TILE - 8) + 4
+			var my := py + (h * 3) % (TILE - 8) + 4
+			ArtUtil.fill_ellipse(self, mx, my, 5.5, 3.6, Color(0.05, 0.19, 0.07, 0.45))
+		if h % 17 == 5:
+			var gx := px + (h * 7) % (TILE - 8) + 4
+			var gy := py + (h * 13) % (TILE - 8) + 4
+			draw_line(Vector2(gx, gy), Vector2(gx, gy + 3), Color(0.88, 0.85, 0.76), 1.4)
+			ArtUtil.fill_ellipse(self, gx, gy - 0.5, 2.8, 1.9, Color(0.72, 0.25, 0.18))
 
 func _path_tile(px: int, py: int, x: int, y: int, h: int) -> void:
 	var TILE := World.TILE
@@ -162,13 +178,7 @@ func _water_base(px: int, py: int, h: int) -> void:
 		pass  # espuma animada no WaterFx
 
 func _draw_map_border_shade() -> void:
-	var wpx := World.MAP_W * World.TILE
-	var wpy := World.MAP_H * World.TILE
-	# sombra interna grossa nas bordas
-	for i in 6:
-		var a := 0.22 * (1.0 - i / 6.0)
-		var c := Color(0, 0, 0, a)
-		draw_rect(Rect2(i, i, wpx - i * 2, 4), c)
-		draw_rect(Rect2(i, wpy - i * 2 - 4, wpx - i * 2, 4), c)
-		draw_rect(Rect2(i, i, 4, wpy - i * 2), c)
-		draw_rect(Rect2(wpx - i * 2 - 4, i, 4, wpy - i * 2), c)
+	var size := Vector2(World.MAP_W * World.TILE, World.MAP_H * World.TILE)
+	# Vinheta real (a antiga era só um filete de 6px): emoldura o mundo e
+	# dissolve a transição dura para o void sem degraus visíveis.
+	ArtUtil.frame_vignette(self, size, 96.0, Color(0, 0, 0), 0.34, 24)

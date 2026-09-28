@@ -7,6 +7,14 @@ const TILE := 32
 const MAP_W := 60
 const MAP_H := 60
 
+## Profundidade: ordena props, personagens e moedas por Y entre si, mesmo
+## estando em nós pais diferentes. O mundo tem 1920px de altura, então o z
+## é escalado para terminar bem antes das camadas de FX (z 1000+).
+const DEPTH_SCALE := 0.25
+
+static func depth_z(y: float) -> int:
+	return int(clampf(y * DEPTH_SCALE, 0.0, 900.0))
+
 const T_GRASS := 0
 const T_PATH := 1
 const T_WATER := 2
@@ -15,8 +23,9 @@ const T_ROCK := 4
 
 var tiles: Array = []
 var _water_tiles: Array[Vector2i] = []
+## tile -> prop (TreeProp/RockProp) que ocupa; usado pela oclusão de personagens.
+var _prop_grid: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
-var _time := 0.0
 var stage_idx := 0
 
 var ground: Node2D
@@ -56,6 +65,7 @@ func generate(seed_value: int = -1) -> void:
 
 	tiles = []
 	_water_tiles.clear()
+	_prop_grid.clear()
 	for y in MAP_H:
 		var row := []
 		row.resize(MAP_W)
@@ -81,12 +91,16 @@ func generate(seed_value: int = -1) -> void:
 				var tree := TreeProp.new()
 				tree.variant = _rng.randi_range(0, 11)
 				tree.position = Vector2(wx, wy)
+				tree.z_index = depth_z(wy)
 				props.add_child(tree)
+				_prop_grid[Vector2i(x, y)] = tree
 			elif t == T_ROCK:
 				var rock := RockProp.new()
 				rock.variant = _rng.randi_range(0, 5)
 				rock.position = Vector2(wx, wy)
+				rock.z_index = depth_z(wy)
 				props.add_child(rock)
+				_prop_grid[Vector2i(x, y)] = rock
 			elif t == T_WATER:
 				_water_tiles.append(Vector2i(x, y))
 
@@ -102,11 +116,13 @@ func generate(seed_value: int = -1) -> void:
 				var emb := EmberProp.new()
 				emb.variant = _rng.randi_range(0, 5)
 				emb.position = Vector2(dx, dy)
+				emb.z_index = depth_z(dy)
 				props.add_child(emb)
 			elif stage_idx == 2 and roll < 0.035:
 				var cry := CrystalProp.new()
 				cry.variant = _rng.randi_range(0, 5)
 				cry.position = Vector2(dx, dy)
+				cry.z_index = depth_z(dy)
 				props.add_child(cry)
 
 	ground.queue_redraw()
@@ -327,6 +343,11 @@ func is_solid_tile(x: int, y: int) -> bool:
 func is_solid_at(wx: float, wy: float) -> bool:
 	return is_solid_tile(int(floor(wx / TILE)), int(floor(wy / TILE)))
 
+## Árvore/pedra que ocupa o tile (null se não houver) — oclusão de personagens.
+func prop_at(tx: int, ty: int) -> Node2D:
+	var n: Variant = _prop_grid.get(Vector2i(tx, ty), null)
+	return n as Node2D
+
 func walkable_tiles() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for y in range(2, MAP_H - 2):
@@ -358,6 +379,3 @@ func build_minimap_image() -> ImageTexture:
 				_: c = grass
 			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
-
-func _process(delta: float) -> void:
-	_time += delta

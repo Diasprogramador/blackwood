@@ -5,11 +5,20 @@ extends Node2D
 ## Decorativo (não bloqueia). Posição = base do prop.
 
 var variant := 0
+var _t := 0.0
 
 func _ready() -> void:
 	queue_redraw()
 
-func _process(_delta: float) -> void:
+## O pulso leva ~2s: repintar a 12Hz mantém o brilho vivo e corta o custo
+## dezenas de cristais que hoje repintavam a 60Hz cada.
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	_t += delta
+	if _t < 0.083:
+		return
+	_t = 0.0
 	queue_redraw()
 
 func _draw() -> void:
@@ -19,6 +28,8 @@ func _draw() -> void:
 	var glow := Color(0.65, 0.35, 1, 0.16 + 0.12 * pulse)
 
 	A.fill_ellipse(self, 0, 4, 12, 4, Color(0, 0, 0, 0.3))
+	# halo largo + núcleo: o brilho só aparece no degrau entre os dois.
+	A.fill_ellipse(self, 0, -4, 19, 13, Color(0.6, 0.3, 1, 0.12 + 0.10 * pulse))
 	A.fill_ellipse(self, 0, -4, 11, 9, glow)
 	var hs := [13.0, 10.0, 7.0]
 	for i in 3:

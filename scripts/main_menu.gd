@@ -26,6 +26,7 @@ func build(bank: int) -> void:
 	essence = bank
 	_focus = 0
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_buttons.clear()
 	_essence_label = null
@@ -232,11 +233,10 @@ static func _parts(v: String) -> Array:
 		nums.append(int(p) if str(p).is_valid_int() else 0)
 	return [nums, suffix]
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not visible:
 		return
-	_tick += 1.0
-	queue_redraw()
+	_tick = MenuArt.back_tick(self, delta, _tick)[0]
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)

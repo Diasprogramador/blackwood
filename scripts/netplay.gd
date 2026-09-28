@@ -184,10 +184,10 @@ func spawn_shot(from: Vector2, dir: Vector2, speed: float, dmg: int, col: Color)
 		main.mp_apply_shot(from, dir, float(speed), int(dmg), col)
 
 @rpc("authority", "unreliable")
-func fx_spawn(fx_type: int, x: float, y: float, s: float) -> void:
+func fx_spawn(fx_type: int, x: float, y: float, s: float, ang: float = 0.0) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_apply_fx"):
-		main.mp_apply_fx(int(fx_type), float(x), float(y), float(s))
+		main.mp_apply_fx(int(fx_type), float(x), float(y), float(s), float(ang))
 
 @rpc("authority", "unreliable")
 func float_txt(txt: String, x: float, y: float, col: Color, size: int) -> void:

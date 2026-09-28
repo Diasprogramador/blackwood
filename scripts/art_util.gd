@@ -96,6 +96,34 @@ static func shadow(node: CanvasItem, cx: float, cy: float, rx: float, ry: float,
 		return
 	fill_ellipse(node, cx, cy, rx, ry, Color(0, 0, 0, alpha))
 
+## Vinheta de moldura CONTÍNUA: camadas finas com alfa caindo em quadrático.
+## Substitui os "degraus" de retângulos grossos, que deixam a banding à mostra.
+## (gera 4 retângulos por camada — estático no chão, ~30Hz no HUD)
+static func frame_vignette(node: CanvasItem, size: Vector2, depth: float,
+		col: Color, max_alpha: float, steps: int = 20) -> void:
+	var w := size.x
+	var h := size.y
+	if w <= 0.0 or h <= 0.0 or depth <= 0.0 or max_alpha <= 0.0:
+		return
+	steps = clampi(steps, 4, 40)
+	var band := depth / float(steps)
+	for i in steps:
+		var t := float(i) / steps
+		var a := max_alpha * (1.0 - t) * (1.0 - t)
+		if a < 0.004:
+			break
+		var m := band * float(i)
+		var iw := w - m * 2.0
+		var ih := h - m * 2.0
+		if iw <= 0.0 or ih <= 0.0:
+			break
+		var c := Color(col.r, col.g, col.b, a)
+		node.draw_rect(Rect2(m, m, iw, band), c)
+		if ih > band * 2.0:
+			node.draw_rect(Rect2(m, m + ih - band, iw, band), c)
+			node.draw_rect(Rect2(m, m + band, band, ih - band * 2.0), c)
+			node.draw_rect(Rect2(m + iw - band, m + band, band, ih - band * 2.0), c)
+
 static func star_pts(cx: float, cy: float, r: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	for i in 10:

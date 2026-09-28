@@ -92,9 +92,14 @@ var touch_move := Vector2.ZERO
 var bind: Dictionary = {}
 
 const SPEED := 192.0  # 3.2 px/frame * 60
+## Recarga do soco básico (22 frames @60). O HUD faz a varredura do cooldown
+## com o MESMO número — era uma literal duplicada em dois arquivos.
+const ATTACK_CD := 22.0 / 60.0
 
 func _ready() -> void:
-	z_index = 5
+	# Profundidade vem do Main (_update_depth): z por Y, na mesma faixa dos
+	# props — assim uma árvore consegue cobrir o personagem.
+	z_index = 0
 	_ensure_body()
 
 func _ensure_body() -> void:
@@ -414,7 +419,7 @@ func basic_attack(enemies: Array) -> Variant:
 	var dealt: int = target.take_damage(raw)
 	if is_crit:
 		dealt += target.take_damage(int(raw / 2.0))
-	attack_cd = 22.0 / 60.0
+	attack_cd = ATTACK_CD
 	punch_t = 1.0
 	attack_t = 0.22
 	squash = 1.0

@@ -5,14 +5,21 @@ extends Node2D
 
 var world: World
 var _t := 0.0
+var _acc := 0.0
 
 func _ready() -> void:
 	z_index = -9
 
+## O antigo "toggle" redesenhava ~30 frames em rajada. Agora é um throttle de
+## verdade, com ritmo por qualidade: a ondulação é lenta, não precisa de 60Hz.
 func _process(delta: float) -> void:
 	_t += delta
-	if int(_t * 8.0) % 2 == 0:
-		queue_redraw()
+	_acc += delta
+	var hz: float = [30.0, 20.0, 12.0][clampi(GameSettings.quality_cache, 0, 2)]
+	if _acc < 1.0 / hz:
+		return
+	_acc = 0.0
+	queue_redraw()
 
 func _draw() -> void:
 	if world == null:
@@ -41,14 +48,22 @@ func _draw() -> void:
 			var fy := py + TILE / 2.0 + d.y * TILE / 2.0
 			var wob := 3.0 + sin(phase * 2.0 + tile.x) * 1.5
 			if d.x == 1:
-				draw_rect(Rect2(px + TILE - 3, py, 3, TILE), Color(0.8, 0.92, 1, 0.35))
+				_foam(px + TILE - 2, py, 2, TILE, -1.0, 0.0)
 				ArtUtil.fill_ellipse(self, px + TILE - 2, fy, 2, wob, Color(0.9, 0.96, 1, 0.4))
 			elif d.x == -1:
-				draw_rect(Rect2(px, py, 3, TILE), Color(0.8, 0.92, 1, 0.35))
+				_foam(px, py, 2, TILE, 1.0, 0.0)
 				ArtUtil.fill_ellipse(self, px + 2, fy, 2, wob, Color(0.9, 0.96, 1, 0.4))
 			elif d.y == 1:
-				draw_rect(Rect2(px, py + TILE - 3, TILE, 3), Color(0.8, 0.92, 1, 0.35))
+				_foam(px, py + TILE - 2, TILE, 2, 0.0, -1.0)
 				ArtUtil.fill_ellipse(self, fx, py + TILE - 2, wob, 2, Color(0.9, 0.96, 1, 0.4))
 			else:
-				draw_rect(Rect2(px, py, TILE, 3), Color(0.8, 0.92, 1, 0.35))
+				_foam(px, py, TILE, 2, 0.0, 1.0)
 				ArtUtil.fill_ellipse(self, fx, py + 2, wob, 2, Color(0.9, 0.96, 1, 0.4))
+
+## Espuma numa aresta da margem: 3 faixas com alfa caindo para dentro da
+## água. A versão anterior era um corte chapado de 3px — mostrava o degrau.
+func _foam(x: float, y: float, w: float, h: float, sx: float, sy: float) -> void:
+	for i in 3:
+		var a: float = [0.40, 0.21, 0.09][i]
+		var t := float(i) * 2.6
+		draw_rect(Rect2(x + sx * t, y + sy * t, w, h), Color(0.82, 0.93, 1, a))

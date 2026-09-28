@@ -11,6 +11,12 @@ func _ready() -> void:
 	_scale = 0.85 + hash(position) % 40 / 100.0
 	queue_redraw()
 
+## Área coberta pela árvore (copa + tronco), em coord. local do nó.
+## A Main usa isto para saber quando o personagem está escondido atrás.
+func occluder_rect() -> Rect2:
+	var s := _scale
+	return Rect2(-21.0 * s, -62.0 * s, 42.0 * s, 68.0 * s)
+
 func _draw() -> void:
 	var A := ArtUtil
 	var s := _scale

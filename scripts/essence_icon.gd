@@ -10,6 +10,8 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _process(delta: float) -> void:
+	if not visible:
+		return
 	tick += delta
 	queue_redraw()
 

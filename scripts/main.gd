@@ -15,6 +15,16 @@ const FloatingTextScript := preload("res://scripts/floating_text.gd")
 var state: State = State.MENU
 
 var world: World
+## Color grading da fase: tinge chão, entidades e FX de uma vez só.
+## A UI fica de fora (está em outra CanvasLayer).
+var atmosphere: CanvasModulate
+## Um tom por fase — é o que faz cada mapa parecer um lugar diferente e não
+## só uma troca de paleta do chão.
+const ATMOS := [
+	Color(0.90, 0.98, 0.93),  # Floresta Verde: sombra fresca de dossel
+	Color(1.00, 0.93, 0.84),  # Terra Queimada: luz quente de brasa
+	Color(0.88, 0.86, 1.00),  # Pântano Sombrio: frio violáceo
+]
 var player: Player
 var camera: Camera2D
 var enemies: Array = []
@@ -89,6 +99,9 @@ var progress: Dictionary = StageData.default_progress()
 const BETWEEN_DELAY := 3.5
 # Onda do meio da run onde o mini-boss aparece (3ª onda, idx 2).
 const MINIBOSS_WAVE := 2
+# Passador de onda (N / ⏭): só libera após matar 50% da cota.
+# Evita pular todas as ondas sem parar no início da wave.
+const SKIP_RATIO := 0.5
 
 # =====================================================================
 #  SETUP
@@ -112,9 +125,15 @@ func _ready() -> void:
 	world.name = "World"
 	add_child(world)
 
+	atmosphere = CanvasModulate.new()
+	atmosphere.name = "Atmosphere"
+	atmosphere.color = Color.WHITE
+	add_child(atmosphere)
+
 	coin_layer = Node2D.new()
 	coin_layer.name = "Coins"
-	coin_layer.z_index = 2
+	# z 0: as moedas carregam z próprio por Y, na mesma faixa do mundo.
+	coin_layer.z_index = 0
 	add_child(coin_layer)
 
 	entities = Node2D.new()
@@ -124,7 +143,9 @@ func _ready() -> void:
 
 	fx_layer = Node2D.new()
 	fx_layer.name = "Fx"
-	fx_layer.z_index = 20
+	# Acima de toda faixa de profundidade (máx ~900): golpes e faíscas nunca
+	# ficam escondidos atrás de uma árvore.
+	fx_layer.z_index = 1000
 	add_child(fx_layer)
 
 	camera = Camera2D.new()
@@ -312,6 +333,9 @@ func _build_gameover_ui(parent: Node) -> void:
 	var panel := MenuArt.FramePanel.new()
 	panel.accent = Color(0.8, 0.25, 0.25)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
+	# O conteúdo passa de 300px? Com grow só p/ baixo o painel saía do centro.
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.custom_minimum_size = Vector2(460, 300)
 	panel.position = Vector2(-230, -150)
 	var sb := StyleBoxFlat.new()
@@ -384,6 +408,8 @@ func _build_victory_ui(parent: Node) -> void:
 	var panel := MenuArt.FramePanel.new()
 	panel.accent = Color(0.5, 0.9, 0.45)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.custom_minimum_size = Vector2(460, 300)
 	panel.position = Vector2(-230, -150)
 	var sb := StyleBoxFlat.new()
@@ -757,6 +783,7 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	world.stage_idx = cur_stage
 	world.generate(seed_value)
 	world.apply_stage(cur_stage)
+	atmosphere.color = ATMOS[clampi(cur_stage, 0, ATMOS.size() - 1)]
 	minimap_tex = world.build_minimap_image()
 	walk_cache = world.walkable_tiles()
 
@@ -781,7 +808,9 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 			Sfx.play(self, "levelup")
 	)
 	entities.add_child(player)
-	camera.position = player.position
+	_update_camera_limits()
+	camera.position = _clamp_camera(player.position)
+	camera.reset_smoothing()
 
 	for a in ally_list.size():
 		_spawn_ally(int(ally_list[a]), a)
@@ -926,6 +955,8 @@ func _clear_world() -> void:
 	ally_keys.clear()
 	mp_foes.clear()
 	walk_cache.clear()
+	_occl_t.clear()
+	_occl_fade.clear()
 	wave_active = false
 	between_timer = 0.0
 	boss_left = 0
@@ -1016,8 +1047,28 @@ func _free_remaining() -> void:
 		i -= 1
 
 ## Pulo manual (N / ⏭): vale para a onda atual, chefão incluso.
-func _skip_wave() -> void:
+## Só libera após matar 50% da cota (anti-spam de skip).
+func skip_threshold() -> int:
+	if wave_quota <= 0:
+		return 999999
+	return int(ceil(float(wave_quota) * SKIP_RATIO))
+
+func can_skip_wave() -> bool:
 	if state != State.PLAY or not wave_active:
+		return false
+	if wave_quota <= 0:
+		return false
+	return wave_killed >= skip_threshold()
+
+func _skip_wave() -> void:
+	if mp == 2:
+		return # client não pula local: host decide via send_input
+	if state != State.PLAY or not wave_active:
+		return
+	if not can_skip_wave():
+		var need := maxi(0, skip_threshold() - wave_killed)
+		say("⏭ Mate %d/%d para pular! (%d faltam)" % [wave_killed, skip_threshold(), need])
+		Sfx.play(self, "error")
 		return
 	say("⏭ Onda pulada!")
 	_free_remaining()
@@ -1046,6 +1097,10 @@ func _physics_process(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	_update_touch()
+	# Profundidade antes de tudo: define quem cobre quem (árvore x player).
+	_update_depth()
+	# Árvore que esconde o personagem há 3s some da frente dele.
+	_update_occlusion(delta)
 	if mp == 2:
 		_client_play_tick(delta)
 		return
@@ -1097,11 +1152,10 @@ func _physics_process(delta: float) -> void:
 			if tgt == null:
 				continue
 			e.ai_update(tgt, delta)
-			if e.try_attack(tgt):
+			if e.try_attack(tgt) and AttackEffect.live < AttackEffect.MAX_LIVE:
 				fx_layer.add_child(AttackEffect.new(
 					AttackEffect.Type.ENEMY_HIT, tgt.position.x, tgt.position.y))
 				add_shake(2.0)
-				hud.queue_redraw()
 		elif e.death_timer >= 0.0:
 			# Cadáver com fade: continua atualizando o sumiço suave.
 			var tgt2 := _nearest_alive(e.position)
@@ -1157,8 +1211,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		camera.offset = Vector2.ZERO
 
-	# regenera HUD suavemente
-	hud.queue_redraw()
+	# O HUD se redesenha sozinho já reduzido (30Hz em Média/Baixa).
 
 	if mp == 1 and netplay.has_ally():
 		_host_net_tick(delta)
@@ -1207,6 +1260,72 @@ func _ally_of(pid: int):
 func _coop_size() -> int:
 	return _all_players().size()
 
+## Quem está mais abaixo na tela desenha por cima — é o que faz a árvore
+## cobrir o player quando ele passa por trás dela. Props já nascem com z fixo;
+## só os personagens se movem, e são poucos (uma atribuição por tick).
+func _update_depth() -> void:
+	for e in enemies:
+		if is_instance_valid(e):
+			e.z_index = World.depth_z(e.position.y)
+	for pl in _all_players():
+		(pl as Player).z_index = World.depth_z((pl as Player).position.y)
+
+## ---- Oclusão ---------------------------------------------------------
+## Se o personagem fica escondido atrás da MESMA árvore/pedra por 3s, o
+## obstáculo some (fade) e ele volta a aparecer. Saindo de trás antes dos
+## 3s a contagem zera e o obstáculo volta normalmente. O teste é só
+## geométrico (área do prop x corpo) + quem desenha por cima (z_index),
+## então não há risco de piscar: enquanto ele estiver embaixo da copa o
+## alpha fica em 0.
+const OCCL_HIDE_AFTER := 3.0
+const OCCL_FADE_SPEED := 4.0
+var _occl_t := {}     # prop -> segundos escondido
+var _occl_fade := {}  # prop -> alpha atual (1.0 = visível)
+
+func _update_occlusion(delta: float) -> void:
+	var hit := {}
+	for pl in _all_players():
+		if pl == null or not is_instance_valid(pl) or not (pl as Player).is_alive():
+			continue
+		var p: Vector2 = (pl as Player).position
+		var pz := World.depth_z(p.y)
+		var body := Rect2(p.x - 7.0, p.y - 34.0, 14.0, 38.0)
+		# janela de tiles generosa: a copa sobe ~62px (2 tiles) acima da base
+		var x0 := int(floor((p.x - 64.0) / World.TILE))
+		var x1 := int(floor((p.x + 64.0) / World.TILE))
+		var y0 := int(floor((p.y - 80.0) / World.TILE))
+		var y1 := int(floor((p.y + 96.0) / World.TILE))
+		for ty in range(y0, y1 + 1):
+			for tx in range(x0, x1 + 1):
+				var pr: Variant = world.prop_at(tx, ty)
+				if pr == null:
+					continue
+				if int(pr.z_index) < pz:
+					continue  # está atrás do personagem, não na frente
+				var lr: Rect2 = pr.occluder_rect()
+				var pp: Vector2 = pr.position
+				if Rect2(pp + lr.position, lr.size).intersects(body):
+					hit[pr] = true
+
+	for pr in hit:
+		_occl_t[pr] = minf(float(_occl_t.get(pr, 0.0)) + delta, OCCL_HIDE_AFTER)
+	for pr in _occl_t.keys():
+		if not hit.has(pr):
+			_occl_t[pr] = 0.0
+
+	for pr in _occl_t.keys():
+		if not is_instance_valid(pr):
+			_occl_t.erase(pr)
+			_occl_fade.erase(pr)
+			continue
+		var target := 0.0 if float(_occl_t[pr]) >= OCCL_HIDE_AFTER else 1.0
+		var f := move_toward(float(_occl_fade.get(pr, 1.0)), target, OCCL_FADE_SPEED * delta)
+		_occl_fade[pr] = f
+		(pr as Node2D).modulate.a = f
+		if float(_occl_t[pr]) <= 0.0 and f >= 1.0:
+			_occl_t.erase(pr)
+			_occl_fade.erase(pr)
+
 func _camera_focus() -> Vector2:
 	var pts := []
 	if player != null and is_instance_valid(player) and player.is_alive():
@@ -1219,7 +1338,41 @@ func _camera_focus() -> Vector2:
 	var mid := Vector2.ZERO
 	for p in pts:
 		mid += p
-	return mid / float(pts.size())
+	return _clamp_camera(mid / float(pts.size()))
+
+## Trava a câmera nos limites do mundo para nunca mostrar o void.
+## Perto da borda o eixo trava (ex.: X para, Y continua seguindo).
+func _clamp_camera(pos: Vector2) -> Vector2:
+	if world == null or camera == null:
+		return pos
+	var ws := world.world_size()
+	var vs := get_viewport_rect().size
+	var zm := camera.zoom
+	if zm.x == 0.0 or zm.y == 0.0:
+		return pos
+	var half := Vector2(vs.x / (2.0 * zm.x), vs.y / (2.0 * zm.y))
+	var cx: float
+	var cy: float
+	if ws.x <= half.x * 2.0:
+		cx = ws.x * 0.5
+	else:
+		cx = clampf(pos.x, half.x, ws.x - half.x)
+	if ws.y <= half.y * 2.0:
+		cy = ws.y * 0.5
+	else:
+		cy = clampf(pos.y, half.y, ws.y - half.y)
+	return Vector2(cx, cy)
+
+## Limites duros da Camera2D (seguram o smoothing) + alvo já clampado.
+func _update_camera_limits() -> void:
+	if camera == null or world == null:
+		return
+	var ws := world.world_size()
+	camera.limit_left = 0
+	camera.limit_top = 0
+	camera.limit_right = int(ws.x)
+	camera.limit_bottom = int(ws.y)
+	camera.position = _clamp_camera(camera.position)
 
 # =====================================================================
 #  MULTIPLAYER EM JOGO (host simula, client renderiza)
@@ -1335,7 +1488,6 @@ func _client_play_tick(delta: float) -> void:
 	else:
 		camera.offset = Vector2.ZERO
 	_send_input_tick(delta)
-	hud.queue_redraw()
 
 func _send_input_tick(delta: float) -> void:
 	input_t += delta
@@ -1604,8 +1756,10 @@ func mp_apply_shot(from: Vector2, dir: Vector2, speed: float, dmg: int, col: Col
 	shots.append(shot)
 	Sfx.play(self, "shoot", -10.0)
 
-func mp_apply_fx(fx_type: int, x: float, y: float, s: float) -> void:
-	fx_layer.add_child(AttackEffect.new(fx_type, x, y, 0.0, s))
+func mp_apply_fx(fx_type: int, x: float, y: float, s: float, ang: float = 0.0) -> void:
+	if AttackEffect.live >= AttackEffect.MAX_LIVE and fx_type < AttackEffect.ROLE_HEAL_BASE:
+		return
+	fx_layer.add_child(AttackEffect.new(fx_type, x, y, ang, s))
 
 func mp_apply_float(txt: String, x: float, y: float, col: Color, size: int) -> void:
 	_float_text(txt, Vector2(x, y), col, size)
@@ -1803,10 +1957,11 @@ func _do_basic_attack(pl: Player = null) -> void:
 		return
 	var target = result.target
 	var pos: Vector2 = target.position
-	# Efeito do personagem + estrela de critico por cima (antes: slash generico).
-	_spawn_role_fx(pos, SkillIcon.basic_effect_for(q.role), 0.85)
+	var ang := (pos - q.position).angle()
+	# Efeito próprio do personagem + estrela de crítico por cima.
+	_spawn_role_fx(pos, SkillIcon.basic_effect_for(q.role), 0.85, ang)
 	if result.crit:
-		_spawn_role_fx(pos, AttackEffect.Type.CRIT, 1.0)
+		_spawn_role_fx(pos, AttackEffect.Type.CRIT, 1.0, ang)
 		add_shake(6.0)
 	Sfx.play(self, "hit", -8.0)
 	_float_text(str(result.dmg), pos + Vector2(0, -30),
@@ -1828,15 +1983,16 @@ func _do_cast(index: int, pl: Player = null) -> void:
 		say(result.get("reason", "Sem mana / em cooldown!"))
 		return
 	if result.kind == "heal":
-		_spawn_heal(q.position)
+		_spawn_heal(q.position, q.role)
 		_spawn_skill_vfx(q.role, _slot_vfx(index), q.position, index >= 4)
 		_float_text("+%d" % result.amount, q.position + Vector2(0, -36),
 			Color(0.4, 1, 0.5), 14)
 		return
 	var target = result.target
-	# Efeito do personagem (antes: burst generico por kind). Ultimate maior.
+	# Golpe próprio do personagem (um tipo por slot). Ultimate maior.
 	var fx_type: int = SkillIcon.effect_for(q.role, str(result.kind), index)
-	_spawn_role_fx(target.position, fx_type, 1.25 if index >= 4 else 1.0)
+	_spawn_role_fx(target.position, fx_type, 1.25 if index >= 4 else 1.0,
+		(target.position - q.position).angle())
 	_spawn_skill_vfx(q.role, _slot_vfx(index), target.position, index >= 4)
 	add_shake(3.0)
 	if index >= 4:
@@ -1858,7 +2014,7 @@ func try_buy_upgrade(idx: int, pl: Player = null) -> void:
 	if q.buy_upgrade(idx):
 		say("Comprado: %s" % ChampData.UPGRADE_DESCS[idx])
 		Sfx.play(self, "buy")
-		_spawn_heal(q.position)
+		_spawn_heal(q.position, q.role)
 	else:
 		say("Gold insuficiente!")
 		Sfx.play(self, "error")
@@ -1879,7 +2035,7 @@ func _use_first_item(pl: Player = null) -> void:
 		if q.use_item(i):
 			say("Usou: %s" % item.name)
 			Sfx.play(self, "potion")
-			_spawn_heal(q.position)
+			_spawn_heal(q.position, q.role)
 			_float_text(item.name, q.position + Vector2(0, -40),
 				Color(0.5, 0.9, 1), 13)
 			used = true
@@ -2177,21 +2333,29 @@ func _spawn_skill_vfx(role: String, kind: String, pos: Vector2, big: bool) -> vo
 		0.4 if big else 0.3, player.flip if player != null else 1.0)
 
 ## Efeito de ataque do personagem (tipo vem do SkillIcon, escala por slot).
-func _spawn_role_fx(pos: Vector2, fx_type: int, scale_p: float = 1.0) -> void:
+## `ang` aponta do atacante para o alvo: o rastro sai na direção certa.
+func _spawn_role_fx(pos: Vector2, fx_type: int, scale_p: float = 1.0,
+		ang: float = 0.0) -> void:
+	var importante := fx_type == AttackEffect.Type.CRIT or fx_type >= AttackEffect.ROLE_HEAL_BASE
+	if not importante and AttackEffect.live >= AttackEffect.MAX_LIVE:
+		return  # teto de VFX: em rajada de golpes nunca estoura o frame
 	if _relay():
-		netplay.fx_spawn.rpc(fx_type, pos.x, pos.y, scale_p)
-	fx_layer.add_child(AttackEffect.new(
-		fx_type, pos.x, pos.y, randf_range(-0.3, 0.3), scale_p))
+		netplay.fx_spawn.rpc(fx_type, pos.x, pos.y, scale_p, ang)
+	fx_layer.add_child(AttackEffect.new(fx_type, pos.x, pos.y, ang, scale_p))
 
-func _spawn_heal(pos: Vector2) -> void:
+## Cura tingida pela paleta do campeão (poções, upgrades e skills de heal).
+func _spawn_heal(pos: Vector2, role: String = "tank") -> void:
+	var fx := AttackEffect.role_heal(role)
 	if _relay():
-		netplay.fx_spawn.rpc(AttackEffect.Type.HEAL, pos.x, pos.y, 1.0)
-	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.HEAL, pos.x, pos.y))
+		netplay.fx_spawn.rpc(fx, pos.x, pos.y, 1.0, 0.0)
+	fx_layer.add_child(AttackEffect.new(fx, pos.x, pos.y))
 
 func _spawn_hit_burst(pos: Vector2) -> void:
+	var fx := AttackEffect.Type.ENEMY_HIT
 	if _relay():
-		netplay.fx_spawn.rpc(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y, 1.0)
-	fx_layer.add_child(AttackEffect.new(AttackEffect.Type.ENEMY_HIT, pos.x, pos.y))
+		netplay.fx_spawn.rpc(fx, pos.x, pos.y, 1.0, 0.0)
+	if AttackEffect.live < AttackEffect.MAX_LIVE:
+		fx_layer.add_child(AttackEffect.new(fx, pos.x, pos.y))
 	var n := 8
 	if GameSettings.quality_cache == 1:
 		n = 5
@@ -2239,7 +2403,7 @@ func _on_shot_hit(proj) -> void:
 	if tgt == null:
 		return
 	tgt.take_damage(proj.damage)
-	fx_layer.add_child(AttackEffect.new(
-		AttackEffect.Type.ENEMY_HIT, tgt.position.x, tgt.position.y))
+	if AttackEffect.live < AttackEffect.MAX_LIVE:
+		fx_layer.add_child(AttackEffect.new(
+			AttackEffect.Type.ENEMY_HIT, tgt.position.x, tgt.position.y))
 	add_shake(2.0)
-	hud.queue_redraw()

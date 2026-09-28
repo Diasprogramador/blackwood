@@ -30,6 +30,7 @@ func build(prog: Dictionary, stage: int, diff: int) -> void:
 	if not StageData.is_diff_unlocked(progress, selected_stage, selected_diff):
 		selected_diff = 0
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_stage_btns.clear()
 	_diff_btns.clear()
@@ -39,13 +40,12 @@ func build(prog: Dictionary, stage: int, diff: int) -> void:
 	step = 0
 	build_chrome_only()
 
-func _to_step_1() -> void:
-	if not StageData.is_stage_unlocked(progress, selected_stage):
-		Sfx.play(self, "error")
-		return
-	Sfx.play(self, "click")
-	step = 1
+## Limpa a tela e remonta a etapa atual.
+## SEM este passo (voltar e ESC chamavam build_chrome_only direto) um segundo
+## MarginContainer nascia em cima do primeiro e a UI ficava duplicada.
+func _rebuild() -> void:
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_stage_btns.clear()
 	_diff_btns.clear()
@@ -53,6 +53,14 @@ func _to_step_1() -> void:
 	_info_label = null
 	_preview = null
 	build_chrome_only()
+
+func _to_step_1() -> void:
+	if not StageData.is_stage_unlocked(progress, selected_stage):
+		Sfx.play(self, "error")
+		return
+	Sfx.play(self, "click")
+	step = 1
+	_rebuild()
 
 func build_chrome_only() -> void:
 	# (re)monta base + conteúdo da etapa atual (usado ao trocar de etapa)
@@ -166,7 +174,7 @@ func _build_step_1(vbox: VBoxContainer) -> void:
 	back.pressed.connect(func():
 		Sfx.play(self, "click")
 		step = 0
-		build_chrome_only()
+		_rebuild()
 	)
 	nav.add_child(back)
 
@@ -321,11 +329,10 @@ func _try_start() -> void:
 	Sfx.play(self, "click")
 	start_pressed.emit(selected_stage, selected_diff)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not visible:
 		return
-	_tick += 1.0
-	queue_redraw()
+	_tick = MenuArt.back_tick(self, delta, _tick)[0]
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)
@@ -357,7 +364,7 @@ func handle_key(key: int) -> bool:
 		return true
 	elif key == KEY_ESCAPE or key == KEY_BACKSPACE:
 		step = 0
-		build_chrome_only()
+		_rebuild()
 		return true
 	return false
 

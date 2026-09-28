@@ -51,8 +51,10 @@ func _buttons() -> Array:
 	var out := []
 	out.append({ id = "attack", c = _bp(w - 95, h - 95, mir, w), r = 44.0 * s })
 	for i in 5:
+		# O passo cresce com a escala: no tamanho "Grande" (r=31) o pitch fixo
+		# de 62 fazia os botões se sobrepor.
 		out.append({ id = "skill%d" % (i + 1),
-			c = _bp(w - 180, h - 90 - i * 62, mir, w), r = 26.0 * s })
+			c = _bp(w - 180, h - 90 - i * 62.0 * s, mir, w), r = 26.0 * s })
 	out.append({ id = "item", c = _bp(w - 270, h - 95, mir, w), r = 24.0 * s })
 	out.append({ id = "channel", c = _bp(150, h - 235, mir, w), r = 26.0 * s })
 	out.append({ id = "shop", c = _bp(w - 95, 175, mir, w), r = 22.0 * s })
@@ -157,8 +159,9 @@ func _draw_button(font: Font, b: Dictionary, role: String, pl) -> void:
 	var r: float = b.r
 	var id := str(b.id)
 	var down := is_down(id)
-	draw_circle(c, r, Color(0, 0, 0, 0.45 if down else 0.30))
-	draw_arc(c, r, 0, TAU, 28, Color(1, 1, 1, 0.65 if down else 0.4), 2.0)
+	SkillIcon.draw_round_bg(self, c, r, SkillIcon.role_color(role), true, down)
+	if down:
+		draw_circle(c, r * 0.86, Color(1, 1, 1, 0.08))
 	if id == "attack":
 		var ready := true
 		if pl != null:
@@ -176,7 +179,11 @@ func _draw_button(font: Font, b: Dictionary, role: String, pl) -> void:
 	elif id == "pause":
 		_center(font, "II", c.x, c.y + 5, 13, Color.WHITE)
 	elif id == "skip":
-		_center(font, "⏭", c.x, c.y + 5, 14, Color(1, 0.85, 0.2))
+		var can_skip := true
+		if main != null and main.has_method("can_skip_wave"):
+			can_skip = bool(main.can_skip_wave())
+		var skip_col := Color(1, 0.85, 0.2) if can_skip else Color(0.5, 0.5, 0.55)
+		_center(font, "⏭", c.x, c.y + 5, 14, skip_col)
 
 func _draw_skill_button(font: Font, c: Vector2, r: float, id: String, role: String, pl) -> void:
 	var slot := int(id.trim_prefix("skill")) - 1
@@ -190,8 +197,25 @@ func _draw_skill_button(font: Font, c: Vector2, r: float, id: String, role: Stri
 	SkillIcon.draw_icon(self, role, str(cfg.get("kind", "damage")), slot, c, r * 0.5, not can)
 	if float(s.get("cd_left", 0.0)) > 0.0:
 		var ratio := clampf(float(s.get("cd_left", 0.0)) / maxf(0.01, float(cfg.get("cd", 1.0))), 0.0, 1.0)
-		draw_circle(c, r * 0.62, Color(0, 0, 0, 0.55 * ratio))
+		# A versão antiga pintava um disco escuro e "limpava" com uma segunda
+		# cor em alpha 0 — que não limpa nada. Agora é uma fatia de verdade,
+		# que encolhe conforme o CD passa.
+		_draw_wedge(c, r * 0.94, ratio)
 		_center(font, str(int(ceil(float(s.get("cd_left", 0.0))))), c.x, c.y + 5, 13, Color.WHITE)
+	elif not can:
+		draw_circle(c, r * 0.94, Color(0.1, 0.08, 0.1, 0.45))
+
+## Fatia circular do topo no sentido horário, cobrindo `frac` do círculo.
+func _draw_wedge(c: Vector2, r: float, frac: float) -> void:
+	frac = clampf(frac, 0.0, 1.0)
+	if frac <= 0.0:
+		return
+	var pts := PackedVector2Array([c])
+	var segs := maxi(6, int(28.0 * frac))
+	for i in segs + 1:
+		var a := -PI * 0.5 + TAU * frac * float(i) / float(segs)
+		pts.append(c + Vector2(cos(a), sin(a)) * r)
+	draw_colored_polygon(pts, Color(0, 0, 0, 0.62))
 
 func _center(font: Font, txt: String, cx: float, y: float, fsize: int, col: Color) -> void:
 	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x

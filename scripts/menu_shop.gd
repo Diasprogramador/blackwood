@@ -22,6 +22,7 @@ func build(prog: Dictionary, champ_idx: int) -> void:
 	progress = prog
 	champ = clampi(champ_idx, 0, ChampData.CHAMPS.size() - 1)
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 	_essence_label = null
 	_content = null
@@ -238,11 +239,10 @@ func _build_supply_rows() -> void:
 	note.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(note)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not visible:
 		return
-	_tick += 1.0
-	queue_redraw()
+	_tick = MenuArt.back_tick(self, delta, _tick)[0]
 
 func _draw() -> void:
 	MenuArt.draw_back(self, size, _tick)

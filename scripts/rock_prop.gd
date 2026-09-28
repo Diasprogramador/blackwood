@@ -9,6 +9,10 @@ var variant := 0
 func _ready() -> void:
 	queue_redraw()
 
+## Área coberta pela pedra, em coord. local do nó (ver TreeProp.occluder_rect).
+func occluder_rect() -> Rect2:
+	return Rect2(-14.0, -14.0, 28.0, 24.0)
+
 func _draw() -> void:
 	var A := ArtUtil
 	var v := variant % 3

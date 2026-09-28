@@ -37,6 +37,7 @@ static func default_data() -> Dictionary:
 		"fullscreen": false, "shake": true, "touch": 0,
 		"quality": 2 if OS.has_feature("mobile") else 1, "touch_size": 1, "touch_side": 0,
 		"hud_bar": true, "show_fps": false,
+		"vsync": true, "fps_limit": 60,
 		"keys": keys,
 	}
 
@@ -56,6 +57,8 @@ static func load_data() -> Dictionary:
 	d["touch_side"] = clampi(int(cfg.get_value("video", "touch_side", 0)), 0, 1)
 	d["hud_bar"] = bool(cfg.get_value("video", "hud_bar", true))
 	d["show_fps"] = bool(cfg.get_value("video", "show_fps", false))
+	d["vsync"] = bool(cfg.get_value("video", "vsync", true))
+	d["fps_limit"] = clampi(int(cfg.get_value("video", "fps_limit", 60)), 0, 1000)
 	quality_cache = int(d["quality"])
 	var keys: Dictionary = d["keys"]
 	for a in ACTIONS:
@@ -80,6 +83,8 @@ static func save_data(d: Dictionary) -> void:
 	cfg.set_value("video", "touch_side", clampi(int(d.get("touch_side", 0)), 0, 1))
 	cfg.set_value("video", "hud_bar", bool(d.get("hud_bar", true)))
 	cfg.set_value("video", "show_fps", bool(d.get("show_fps", false)))
+	cfg.set_value("video", "vsync", bool(d.get("vsync", true)))
+	cfg.set_value("video", "fps_limit", clampi(int(d.get("fps_limit", 60)), 0, 1000))
 	quality_cache = clampi(int(d.get("quality", 1)), 0, 2)
 	var keys: Dictionary = d.get("keys", {})
 	for a in ACTIONS:
@@ -117,11 +122,20 @@ static func key_label(d: Dictionary, action_id: String) -> String:
 		return "—"
 	return OS.get_keycode_string(int((keys[action_id] as Array)[0]))
 
+## Aplica tudo que é vídeo de uma vez: janela, VSync e teto de FPS.
+## Sem teto, o desenho procedural do2D queima GPU/bateria à toa.
 static func apply_video(d: Dictionary) -> void:
 	if bool(d.get("fullscreen", false)):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	Engine.max_fps = clampi(int(d.get("fps_limit", 60)), 0, 1000)
+	# headless (CI/teste) não tem swapchain: pula o VSync.
+	if DisplayServer.get_name() == "headless":
+		return
+	DisplayServer.window_set_vsync_mode(
+		DisplayServer.VSYNC_ENABLED if bool(d.get("vsync", true))
+		else DisplayServer.VSYNC_DISABLED)
 
 static func shake_enabled(d: Dictionary) -> bool:
 	return bool(d.get("shake", true))

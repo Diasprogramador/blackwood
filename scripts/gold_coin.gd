@@ -32,10 +32,13 @@ func setup(amount: int, from_pos: Vector2, player: Player) -> void:
 	var a := randf() * TAU
 	var sp := randf_range(40.0, 110.0)
 	_vel = Vector2(cos(a), sin(a)) * sp
-	# levemente acima do chão para y-sort
-	z_index = 1
+	# profundidade por Y (mesma faixa do mundo/props)
+	z_index = World.depth_z(position.y)
 
 func _process(delta: float) -> void:
+	# a moeda se move (impulso + ímã): z acompanha para não sumir atrás
+	# de um prop quando ela está na frente.
+	z_index = World.depth_z(position.y)
 	if _collected:
 		return
 	if frozen:

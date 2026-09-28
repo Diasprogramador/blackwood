@@ -8,6 +8,27 @@ const CREAM := Color(0.96, 0.90, 0.74)
 const GOLD := Color(1.0, 0.85, 0.4)
 const DIM := Color(0.7, 0.68, 0.62)
 
+## Acumulador compartilhado do fundo animado dos menus (só um fica visível).
+static var _back_acc := 0.0
+
+## Chame no _process das telas de menu:
+##   var r := MenuArt.back_tick(self, delta, _tick)
+##   _tick = r[0]
+##   if r[1]: ...repaint extra da tela...
+## O tick avança por TEMPO (não por frame), então limitar o repaint não
+## desacelera a animação — e fora da qualidade Alta o fundo inteiro (céu,
+## pinheiros, vinheta, brasas) passa a repintar a 30Hz em vez de 60.
+## Retorna [novo_tick, deve_repintar].
+static func back_tick(node: Control, delta: float, tick: float) -> Array:
+	_back_acc += delta
+	var hz := 60.0 if GameSettings.quality_cache <= 0 else 30.0
+	var repaint := false
+	if _back_acc >= 1.0 / hz:
+		_back_acc = 0.0
+		repaint = true
+		node.queue_redraw()
+	return [tick + delta * 60.0, repaint]
+
 ## Fundo completo (chame no _draw da tela, com size do Control + tick animado).
 static func draw_back(node: CanvasItem, size: Vector2, tick: float) -> void:
 	var w := size.x
@@ -162,15 +183,9 @@ static func _draw_embers(node: CanvasItem, w: float, h: float, tick: float) -> v
 		node.draw_circle(Vector2(xx, yy), 1.6, Color(1, 0.6, 0.2, a * 0.8))
 
 static func _draw_vignette(node: CanvasItem, w: float, h: float) -> void:
-	for i in 8:
-		var t := float(i) / 8.0
-		var a := 0.30 * (1.0 - t)
-		var m := 70.0 * t
-		var c := Color(0, 0, 0, a)
-		node.draw_rect(Rect2(m, m, w - m * 2, 5), c)
-		node.draw_rect(Rect2(m, h - m - 5, w - m * 2, 5), c)
-		node.draw_rect(Rect2(m, m, 5, h - m * 2), c)
-		node.draw_rect(Rect2(w - m - 5, m, 5, h - m * 2), c)
+	# Moldura contínua: a versão antiga espaçava faixas de 5px a cada 8.75px,
+	# deixando a "escadinha" à mostra.
+	ArtUtil.frame_vignette(node, Vector2(w, h), 92.0, Color(0, 0, 0), 0.34, 22)
 	# cantos bem escuros
 	for corner in [Vector2(0, 0), Vector2(w, 0), Vector2(0, h), Vector2(w, h)]:
 		ArtUtil.fill_ellipse(node, corner.x, corner.y, 190, 150, Color(0, 0, 0, 0.55))
@@ -438,15 +453,22 @@ class EmberVeil extends Control:
 	var tick := 0.0
 	var dim := Color(0.08, 0.0, 0.0, 0.72)
 	var ember := Color(1, 0.4, 0.12)
+	var _acc := 0.0
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	## Tela parada: repintar a 60Hz o véu inteiro (retângulo cheio + vinheta
+	## de 18 degraus + brasas) é puro custo. Ritmo igual ao dos menus.
 	func _process(delta: float) -> void:
 		if not visible:
 			return
 		tick += delta
-		queue_redraw()
+		_acc += delta
+		var hz := 60.0 if GameSettings.quality_cache <= 0 else 30.0
+		if _acc >= 1.0 / hz:
+			_acc = 0.0
+			queue_redraw()
 
 	func _draw() -> void:
 		var w := size.x
@@ -454,15 +476,7 @@ class EmberVeil extends Control:
 		if w <= 0.0 or h <= 0.0:
 			return
 		draw_rect(Rect2(Vector2.ZERO, size), dim)
-		for i in 6:
-			var t := float(i) / 6.0
-			var a := 0.35 * (1.0 - t)
-			var m := 60.0 * t
-			var cc := Color(0, 0, 0, a)
-			draw_rect(Rect2(m, m, w - m * 2, 5), cc)
-			draw_rect(Rect2(m, h - m - 5, w - m * 2, 5), cc)
-			draw_rect(Rect2(m, m, 5, h - m * 2), cc)
-			draw_rect(Rect2(w - m - 5, m, 5, h - m * 2), cc)
+		ArtUtil.frame_vignette(self, size, 84.0, Color(0, 0, 0), 0.40, 18)
 		for i in 22:
 			var seed := float(hash(i * 13 + 7) % 1000) / 1000.0
 			var yy := h - fmod(tick * (14.0 + seed * 20.0) + seed * 400.0, h + 40.0) + 20.0
