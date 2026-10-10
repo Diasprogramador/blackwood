@@ -5,6 +5,7 @@ extends Node2D
 ## Posição = centro da pedra (pé no chão levemente abaixo).
 
 var variant := 0
+var cached_texture: Texture2D
 
 func _ready() -> void:
 	queue_redraw()
@@ -14,6 +15,9 @@ func occluder_rect() -> Rect2:
 	return Rect2(-14.0, -14.0, 28.0, 24.0)
 
 func _draw() -> void:
+	if cached_texture != null:
+		draw_texture(cached_texture, Vector2(-48, -80))
+		return
 	var A := ArtUtil
 	var v := variant % 3
 

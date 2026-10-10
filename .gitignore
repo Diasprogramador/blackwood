@@ -27,3 +27,6 @@ Desktop.ini
 *~
 *.bak
 *.orig
+
+# Local editor state and signing material
+Godot/

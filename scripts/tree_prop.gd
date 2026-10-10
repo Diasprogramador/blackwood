@@ -6,6 +6,7 @@ extends Node2D
 
 var variant := 0
 var _scale := 1.0
+var cached_texture: Texture2D
 
 func _ready() -> void:
 	_scale = 0.85 + hash(position) % 40 / 100.0
@@ -18,6 +19,9 @@ func occluder_rect() -> Rect2:
 	return Rect2(-21.0 * s, -62.0 * s, 42.0 * s, 68.0 * s)
 
 func _draw() -> void:
+	if cached_texture != null:
+		draw_texture_rect(cached_texture, Rect2(-48 * _scale, -80 * _scale, 96 * _scale, 96 * _scale), false)
+		return
 	var A := ArtUtil
 	var s := _scale
 	var v := variant % 3

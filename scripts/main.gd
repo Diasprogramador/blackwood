@@ -4,7 +4,7 @@ extends Node2D
 ## spawn, câmera, drop de gold e integração das UIs.
 ## Port de Main.java (modo gráfico) + GamePanel.java (loop, spawn, input, overlays).
 
-enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE }
+enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE, UPGRADE }
 
 const WorldScript := preload("res://scripts/world.gd")
 const PlayerScript := preload("res://scripts/player.gd")
@@ -76,6 +76,9 @@ var settings_ui: SettingsMenu
 var pause_layer: Control
 var gameover_layer: Control
 var victory_layer: Control
+var upgrade_menu: RunUpgradeMenu
+var _pending_upgrades := 0
+var _current_offers: Array = []
 var settings: Dictionary = GameSettings.default_data()
 var _shop_return: State = State.MENU
 
@@ -107,6 +110,7 @@ const SKIP_RATIO := 0.5
 #  SETUP
 # =====================================================================
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	randomize()
 	settings = GameSettings.load_data()
 	GameSettings.apply_video(settings)
@@ -123,6 +127,7 @@ func _ready() -> void:
 
 	world = WorldScript.new()
 	world.name = "World"
+	world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(world)
 
 	atmosphere = CanvasModulate.new()
@@ -132,17 +137,20 @@ func _ready() -> void:
 
 	coin_layer = Node2D.new()
 	coin_layer.name = "Coins"
+	coin_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
 	# z 0: as moedas carregam z próprio por Y, na mesma faixa do mundo.
 	coin_layer.z_index = 0
 	add_child(coin_layer)
 
 	entities = Node2D.new()
 	entities.name = "Entities"
+	entities.process_mode = Node.PROCESS_MODE_PAUSABLE
 	entities.y_sort_enabled = true
 	add_child(entities)
 
 	fx_layer = Node2D.new()
 	fx_layer.name = "Fx"
+	fx_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
 	# Acima de toda faixa de profundidade (máx ~900): golpes e faíscas nunca
 	# ficam escondidos atrás de uma árvore.
 	fx_layer.z_index = 1000
@@ -150,6 +158,7 @@ func _ready() -> void:
 
 	camera = Camera2D.new()
 	camera.name = "Camera"
+	camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = 8.0
 	add_child(camera)
@@ -242,6 +251,9 @@ func _ready() -> void:
 	_build_pause_ui(ui_root)
 	_build_gameover_ui(ui_root)
 	_build_victory_ui(ui_root)
+	upgrade_menu = RunUpgradeMenu.new()
+	upgrade_menu.chosen.connect(_choose_run_upgrade)
+	ui_root.add_child(upgrade_menu)
 
 	_enter_menu()
 
@@ -337,7 +349,10 @@ func _build_gameover_ui(parent: Node) -> void:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.custom_minimum_size = Vector2(460, 300)
-	panel.position = Vector2(-230, -150)
+	panel.offset_left = -230
+	panel.offset_right = 230
+	panel.offset_top = -150
+	panel.offset_bottom = 150
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.1, 0.06, 0.06, 0.97)
 	sb.border_color = Color(0.8, 0.2, 0.2)
@@ -362,6 +377,8 @@ func _build_gameover_ui(parent: Node) -> void:
 	kills.name = "Kills"
 	kills.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kills.add_theme_font_size_override("font_size", 18)
+	kills.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	kills.custom_minimum_size.x = 400
 	v.add_child(kills)
 
 	var lv := Label.new()
@@ -475,6 +492,10 @@ func _build_victory_ui(parent: Node) -> void:
 #  FLUXO DE TELAS (menu → campeão → fase → jogo)
 # =====================================================================
 func _hide_all() -> void:
+	if touch_ui != null:
+		touch_ui.hide()
+	if upgrade_menu != null:
+		upgrade_menu.hide()
 	hud.visible = false
 	shop.visible = false
 	pause_layer.visible = false
@@ -554,6 +575,7 @@ func _on_settings_back() -> void:
 		pause_layer.visible = true
 		state = State.PAUSE
 	else:
+		get_tree().paused = false
 		_enter_menu()
 
 func _enter_multi() -> void:
@@ -799,6 +821,7 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 		if bool(unl[i]):
 			cfgs.append(role_skills[i])
 	player.setup(c.nome, c.role, cfgs)
+	player.dash_enabled = mp == 0
 	player.position = world.center_px()
 	player.died.connect(_on_player_died)
 	player.leveled_up.connect(func(msg):
@@ -806,6 +829,9 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 			say(msg)
 			_float_text(msg, player.position + Vector2(0, -40), Color(1, 0.9, 0.4), 13)
 			Sfx.play(self, "levelup")
+			if mp == 0:
+				_pending_upgrades += 1
+				_open_run_upgrade.call_deferred()
 	)
 	entities.add_child(player)
 	_update_camera_limits()
@@ -841,7 +867,36 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	else:
 		say("Bem-vindo, %s! %s • %s (%d/5 skills)" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff), nskills])
 		say("%s = soco | 1-%d = skills | %s = loja" % [atk_key, nskills, shop_key])
-	say("Mana é curta: cada skill conta! Sobreviva às 5 ondas!")
+	say("Ataque básico automático • suba de nível e escolha melhorias!")
+
+func _open_run_upgrade() -> void:
+	if mp != 0 or state != State.PLAY or _pending_upgrades <= 0 or player == null or not player.is_alive():
+		return
+	_current_offers = RunUpgrades.offer(player)
+	if _current_offers.is_empty():
+		_pending_upgrades = 0
+		return
+	state = State.UPGRADE
+	get_tree().paused = true
+	upgrade_menu.open(_current_offers, player.level)
+	_update_touch()
+
+func _choose_run_upgrade(id: String) -> void:
+	if state != State.UPGRADE:
+		return
+	var offered := false
+	for option in _current_offers:
+		if option.id == id:
+			offered = true
+	if not offered or not RunUpgrades.apply(player, id):
+		upgrade_menu.open(_current_offers, player.level)
+		return
+	_pending_upgrades -= 1
+	_current_offers.clear()
+	get_tree().paused = false
+	state = State.PLAY
+	Sfx.play(self, "buy", -6.0)
+	_open_run_upgrade.call_deferred()
 
 ## Spawna um aliado P2..P4 (host simula, client só renderiza).
 func _spawn_ally(champ_idx: int, slot: int) -> void:
@@ -933,6 +988,11 @@ func _diff_mults() -> Dictionary:
 	return m
 
 func _clear_world() -> void:
+	get_tree().paused = false
+	_pending_upgrades = 0
+	_current_offers.clear()
+	if upgrade_menu != null:
+		upgrade_menu.hide()
 	for e in enemies:
 		if is_instance_valid(e):
 			e.queue_free()
@@ -1092,11 +1152,11 @@ func _find_label(root: Node, name: String) -> Label:
 #  LOOP
 # =====================================================================
 func _physics_process(delta: float) -> void:
+	_update_touch()
 	if state != State.PLAY:
 		return
 	if player == null or not is_instance_valid(player):
 		return
-	_update_touch()
 	# Profundidade antes de tudo: define quem cobre quem (árvore x player).
 	_update_depth()
 	# Árvore que esconde o personagem há 3s some da frente dele.
@@ -1106,6 +1166,12 @@ func _physics_process(delta: float) -> void:
 		return
 	game_time += delta
 	_apply_ally_input()
+	for pl in _all_players():
+		if pl.is_alive():
+			_do_basic_attack(pl, true)
+			_tick_aura(pl, delta)
+	if state != State.PLAY:
+		return
 	if wave_banner_t > 0.0:
 		wave_banner_t -= delta
 
@@ -1118,7 +1184,7 @@ func _physics_process(delta: float) -> void:
 		_spawn_timer += delta
 		var cap := StageData.alive_cap(cur_stage, cur_diff)
 		# Spawn rápido no começo da onda, mais lento no fim (difícil = mais pressão).
-		var interval := maxf(0.35, 1.1 - cur_diff * 0.15 - wave_idx * 0.08)
+		var interval := maxf(0.25, 0.65 - cur_diff * 0.08 - wave_idx * 0.05)
 		if wave_idx == StageData.WAVES_PER_STAGE - 1:
 			interval *= 0.7  # onda do chefão: reforços chegam mais rápido
 		if _spawn_timer >= interval and wave_spawned < wave_quota and alive < cap:
@@ -1166,20 +1232,7 @@ func _physics_process(delta: float) -> void:
 	for e in enemies:
 		if is_instance_valid(e) and e.is_alive():
 			bodies.append(e)
-	for i in bodies.size():
-		var a = bodies[i]
-		for j in range(i + 1, bodies.size()):
-			var b = bodies[j]
-			var off: Vector2 = b.position - a.position
-			var dd := off.length()
-			if dd < 24.0 and dd > 0.01:
-				var push: Vector2 = off / dd * (24.0 - dd) * 0.35
-				var anx: Vector2 = a.position - push
-				if not world.is_solid_at(anx.x, anx.y):
-					a.position = anx
-				var bnx: Vector2 = b.position + push
-				if not world.is_solid_at(bnx.x, bnx.y):
-					b.position = bnx
+	EnemySpacing.separate(bodies, world)
 
 	# remove inimigos mortos com fade terminado
 	var i := enemies.size() - 1
@@ -1524,7 +1577,7 @@ func touch_active() -> bool:
 func _update_touch() -> void:
 	if touch_ui == null:
 		return
-	var show := touch_active() and state == State.PLAY
+	var show := touch_active() and state == State.PLAY and not shop.visible
 	touch_ui.visible = show
 	var td := Vector2.ZERO
 	if show:
@@ -1548,6 +1601,9 @@ func touch_button(id: String) -> void:
 			_close_shop()
 		return
 	match id:
+		"dash":
+			if mp == 0 and player != null:
+				player.try_dash()
 		"attack":
 			_do_basic_attack()
 		"channel":
@@ -1879,6 +1935,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				elif GameSettings.match_key(settings, "attack", key):
 					_do_basic_attack()
 					get_viewport().set_input_as_handled()
+				elif GameSettings.match_key(settings, "dash", key):
+					if mp == 0:
+						player.try_dash()
+					get_viewport().set_input_as_handled()
 				elif GameSettings.match_key(settings, "skill1", key):
 					_do_cast(0)
 				elif GameSettings.match_key(settings, "skill2", key):
@@ -1922,6 +1982,7 @@ func _set_ally_controlled(v: bool) -> void:
 			(pl as Player).controlled = v
 
 func _set_pause(v: bool) -> void:
+	get_tree().paused = v
 	pause_layer.visible = v
 	state = State.PAUSE if v else State.PLAY
 	if mp == 1:
@@ -1944,30 +2005,48 @@ func _toggle_channel(pl: Player = null) -> void:
 		say("Canalização cancelada.")
 	q.queue_redraw()
 
-func _do_basic_attack(pl: Player = null) -> void:
+func _do_basic_attack(pl: Player = null, automatic: bool = false) -> void:
 	if mp == 2 and pl == null:
 		return
 	var q := pl if pl != null else player
-	if q == null:
+	if q == null or not q.is_alive():
 		return
 	var result = q.basic_attack(enemies)
 	if result == null:
-		if q.attack_cd <= 0.0 and not q.channeling:
+		if not automatic and q.attack_cd <= 0.0 and not q.channeling:
 			say("Nenhum alvo no alcance! (%dpx)" % q.attack_range)
 		return
-	var target = result.target
-	var pos: Vector2 = target.position
-	var ang := (pos - q.position).angle()
-	# Efeito próprio do personagem + estrela de crítico por cima.
-	_spawn_role_fx(pos, SkillIcon.basic_effect_for(q.role), 0.85, ang)
-	if result.crit:
-		_spawn_role_fx(pos, AttackEffect.Type.CRIT, 1.0, ang)
-		add_shake(6.0)
+	for hit in result.hits:
+		var target = hit.target
+		var pos: Vector2 = target.position
+		var ang := (pos - q.position).angle()
+		_spawn_strike(q.position, pos, q.role)
+		_spawn_role_fx(pos, SkillIcon.basic_effect_for(q.role), 0.85, ang)
+		if hit.crit:
+			_spawn_role_fx(pos, AttackEffect.Type.CRIT, 1.0, ang)
+			add_shake(3.0)
+		_float_text(str(hit.dmg), pos + Vector2(0, -30),
+			Color(1, 0.85, 0.2) if hit.crit else Color(1, 1, 0.5), 15 if hit.crit else 12)
+		if not target.is_alive():
+			_on_enemy_killed(target)
 	Sfx.play(self, "hit", -8.0)
-	_float_text(str(result.dmg), pos + Vector2(0, -30),
-		Color(1, 0.85, 0.2) if result.crit else Color(1, 1, 0.5), 15 if result.crit else 12)
-	if not target.is_alive():
-		_on_enemy_killed(target)
+
+func _tick_aura(pl: Player, delta: float) -> void:
+	if pl.aura_rank <= 0:
+		return
+	pl.aura_cd -= delta
+	if pl.aura_cd > 0.0:
+		return
+	pl.aura_cd = 0.7
+	var radius := 64.0 + pl.aura_rank * 12.0
+	for enemy in enemies:
+		if not is_instance_valid(enemy) or not enemy.is_alive():
+			continue
+		if pl.position.distance_squared_to(enemy.position) <= radius * radius:
+			var damage: int = enemy.take_damage(4 + pl.magic / 3 + pl.aura_rank * 4)
+			_float_text(str(damage), enemy.position + Vector2(0, -30), Color(0.65, 1, 0.45), 12)
+			if not enemy.is_alive():
+				_on_enemy_killed(enemy)
 
 func _do_cast(index: int, pl: Player = null) -> void:
 	if mp == 2 and pl == null:
@@ -1989,6 +2068,7 @@ func _do_cast(index: int, pl: Player = null) -> void:
 			Color(0.4, 1, 0.5), 14)
 		return
 	var target = result.target
+	_spawn_strike(q.position, target.position, q.role)
 	# Golpe próprio do personagem (um tipo por slot). Ultimate maior.
 	var fx_type: int = SkillIcon.effect_for(q.role, str(result.kind), index)
 	_spawn_role_fx(target.position, fx_type, 1.25 if index >= 4 else 1.0,
@@ -2094,9 +2174,32 @@ func mp_on_buy_item(pid: int, idx: int) -> void:
 #  MORTE DE INIMIGO → GOLD DROP + PROGRESSO DA ONDA
 # =====================================================================
 func _on_enemy_killed(e) -> void:
+	# Death signals and hit feedback can both reach this handler.
+	if e.reward_claimed:
+		return
+	e.reward_claimed = true
 	kill_count += 1
 	wave_killed += 1
-	if player:
+	if player and mp == 0:
+		var gems := get_tree().get_nodes_in_group("xp_gems")
+		var merged := false
+		if gems.size() >= 128:
+			for gem in gems:
+				if not gem.is_queued_for_deletion():
+					gem.amount += e.exp_reward
+					merged = true
+					break
+		if not merged:
+			var gem := XpGem.new()
+			gem.amount = e.exp_reward
+			gem.target = player
+			gem.position = e.position
+			gem.collected.connect(func(amount):
+				if player != null and is_instance_valid(player):
+					player.gain_exp(amount)
+			)
+			coin_layer.add_child(gem)
+	elif player:
 		player.gain_exp(e.exp_reward)
 	for pl in allies:
 		if pl != null and is_instance_valid(pl):
@@ -2138,7 +2241,8 @@ func _on_enemy_killed(e) -> void:
 					Color(1, 0.85, 0.25), 13)
 		)
 	# EXP flutuante
-	_float_text("+%d XP" % e.exp_reward, e.position + Vector2(0, -46), Color(0.8, 0.7, 1), 12)
+	if mp != 0:
+		_float_text("+%d XP" % e.exp_reward, e.position + Vector2(0, -46), Color(0.8, 0.7, 1), 12)
 	# Progresso da onda
 	if wave_active:
 		var left := maxi(0, wave_quota - wave_killed)
@@ -2308,7 +2412,7 @@ func _relay() -> bool:
 	return mp == 1 and netplay.has_ally()
 
 func _float_text(msg: String, pos: Vector2, col: Color, size: int) -> void:
-	if msg == "":
+	if msg == "" or FloatingText.live >= FloatingText.MAX_LIVE:
 		return
 	if _relay():
 		netplay.float_txt.rpc(msg, pos.x, pos.y, col, size)
@@ -2407,3 +2511,10 @@ func _on_shot_hit(proj) -> void:
 		fx_layer.add_child(AttackEffect.new(
 			AttackEffect.Type.ENEMY_HIT, tgt.position.x, tgt.position.y))
 	add_shake(2.0)
+
+func _spawn_strike(origin: Vector2, target: Vector2, role: String) -> void:
+	if StrikeTrail.live >= 18:
+		return
+	fx_layer.add_child(StrikeTrail.new(origin, target, role))
+	if _relay():
+		netplay.strike_fx.rpc(origin, target, role)

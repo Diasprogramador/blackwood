@@ -21,7 +21,7 @@ const TYPES := {
 		gold = 60, exp = 45, color = Color(0.71, 0.16, 0.16),
 	},
 	"BARON": {
-		name = "Barão Nashor", hp = 420, atk = 38, def = 22, mag = 25, mana = 120,
+		name = "Devorador do Brejo", hp = 420, atk = 38, def = 22, mag = 25, mana = 120,
 		gold = 120, exp = 85, color = Color(0.39, 0.16, 0.55),
 	},
 	"JUNGLE": {

@@ -184,6 +184,12 @@ func spawn_shot(from: Vector2, dir: Vector2, speed: float, dmg: int, col: Color)
 		main.mp_apply_shot(from, dir, float(speed), int(dmg), col)
 
 @rpc("authority", "unreliable")
+func strike_fx(origin: Vector2, target: Vector2, role: String) -> void:
+	var main := get_parent()
+	if main != null and StrikeTrail.live < 18:
+		main.fx_layer.add_child(StrikeTrail.new(origin, target, role))
+
+@rpc("authority", "unreliable")
 func fx_spawn(fx_type: int, x: float, y: float, s: float, ang: float = 0.0) -> void:
 	var main := get_parent()
 	if main != null and main.has_method("mp_apply_fx"):

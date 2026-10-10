@@ -25,9 +25,12 @@ func _draw() -> void:
 	if world == null:
 		return
 	var TILE := World.TILE
+	var visible_rect := (get_canvas_transform().affine_inverse() * get_viewport_rect()).grow(TILE)
 	for tile in world._water_tiles:
 		var px := tile.x * TILE
 		var py := tile.y * TILE
+		if not visible_rect.intersects(Rect2(px, py, TILE, TILE)):
+			continue
 		var phase := _t * 2.0 + tile.x * 0.7 + tile.y * 0.45
 		# ondulação
 		var ox := sin(phase) * 5.0

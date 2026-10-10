@@ -165,7 +165,11 @@ func _draw() -> void:
 	if type >= ROLE_FX_BASE:
 		var k := type - ROLE_FX_BASE
 		var fam := int(k / float(SLOTS))
-		_draw_role(fam, k - fam * SLOTS, t, inv)
+		var slot := k - fam * SLOTS
+		if slot == 0:
+			_draw_pixel_attack(fam, slot, t, inv)
+		else:
+			_draw_role(fam, slot, t, inv)
 		return
 	match type:
 		Type.SLASH: _draw_slash(t, inv)
@@ -176,6 +180,54 @@ func _draw() -> void:
 		Type.SHADOW_STRIKE: _draw_slash(t, inv)
 		Type.FROST_ARROW: _draw_magic_burst(t, inv)
 		Type.CHANNEL: _draw_channel_aura()
+
+## Deliberate three-phase attacks, snapped to a two-pixel grid. One node,
+## bounded primitive count; no particles, lights or full-screen shaders.
+func _draw_pixel_attack(fam: int, slot: int, t: float, inv: float) -> void:
+	var palette: Array = PAL[clampi(fam, 0, 4)]
+	var color: Color = palette[0]
+	var light: Color = palette[2]
+	var reach := (26.0 + slot * 5.0) * fx_scale
+	var phase := floorf(inv * 8.0) / 8.0
+	var count := 5 if _q() >= 2 else 9
+	var dir := Vector2.from_angle(angle)
+	var side := dir.orthogonal()
+	if fam <= 1:
+		# Sweeping blade: dark silhouette, colored edge, bright impact tip.
+		var start := angle - 1.8 + phase * 2.2
+		var previous := (Vector2.from_angle(start) * reach).snapped(Vector2(2, 2))
+		for i in count:
+			var a := start + float(i + 1) / count * 1.8
+			var point := (Vector2.from_angle(a) * reach).snapped(Vector2(2, 2))
+			draw_line(previous, point, Color(palette[1], t), 10.0, false)
+			draw_line(previous, point, Color(color, t), 6.0, false)
+			if i > count / 2:
+				draw_line(previous, point, Color(light, t), 2.0, false)
+			previous = point
+	elif fam == 3:
+		# Ice arrow leaves a short segmented wake behind the impact.
+		for i in 5:
+			var center := (-dir * (i * 12.0 + phase * 14.0)).snapped(Vector2(2, 2))
+			draw_line(center - side * 4, center + dir * 8, Color(color, t * (1.0 - i * 0.15)), 3, false)
+			draw_line(center + side * 4, center + dir * 8, Color(light, t * (1.0 - i * 0.15)), 2, false)
+	else:
+		# Lantern star / healing leaves have different radial silhouettes.
+		for i in count:
+			var a := TAU * i / count + phase * 0.7
+			var center := (Vector2.from_angle(a) * reach * (0.3 + phase)).snapped(Vector2(2, 2))
+			var sz := 4.0 if fam == 4 else 6.0
+			draw_rect(Rect2(center - Vector2(sz, 2), Vector2(sz * 2, 4)), Color(color, t))
+			draw_rect(Rect2(center - Vector2(2, sz), Vector2(4, sz * 2)), Color(light, t))
+	# Impact flash is brief so the target remains readable.
+	if inv < 0.45:
+		var core := 12.0 * (1.0 - inv / 0.45) * fx_scale
+		draw_rect(Rect2(-core, -2, core * 2, 4), light)
+		draw_rect(Rect2(-2, -core, 4, core * 2), light)
+	if _q() < 2:
+		for i in 5:
+			var a := angle + i * 1.256
+			var point := (Vector2.from_angle(a) * reach * (0.4 + phase * 1.5)).snapped(Vector2(2, 2))
+			draw_rect(Rect2(point, Vector2(3, 3)), Color(color, t))
 
 # ----------------------------------------------------------------------
 #  Primitivas (todas leem GameSettings.quality_cache)

@@ -7,6 +7,8 @@ extends Object
 const RATE := 22050
 
 static var _cache := {}
+static var _last_played := {}
+static var _voices := 0
 
 static func ensure_buses(d: Dictionary) -> void:
 	for bus in ["Music", "SFX"]:
@@ -35,6 +37,10 @@ static func _set_bus_vol(bus: String, v: int) -> void:
 static func play(parent: Node, id: String, vol_db: float = 0.0) -> void:
 	if parent == null:
 		return
+	var now := Time.get_ticks_msec()
+	if _voices >= 16 or now - int(_last_played.get(id, -1000)) < 45:
+		return
+	_last_played[id] = now
 	var stream: AudioStreamWAV = _sample(id)
 	if stream == null:
 		return
@@ -43,6 +49,8 @@ static func play(parent: Node, id: String, vol_db: float = 0.0) -> void:
 	p.bus = "SFX"
 	p.volume_db = vol_db
 	parent.add_child(p)
+	_voices += 1
+	p.tree_exiting.connect(func(): _voices -= 1)
 	p.finished.connect(func(): p.queue_free())
 	p.play()
 

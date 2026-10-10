@@ -45,104 +45,79 @@ func build(bank: int) -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(vbox)
 
-	var spacer_top := Control.new()
-	spacer_top.custom_minimum_size = Vector2(1, 60)
-	spacer_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(spacer_top)
-
-	var title := MenuArt.title_label_gold("BLACKWOOD", 84)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(title)
-
-	var sub := MenuArt.title_label("✦ Ecos da Rift ✦", 22)
-	sub.add_theme_color_override("font_color", MenuArt.GOLD)
-	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(sub)
-	vbox.add_child(MenuArt.divider())
-
-	var spacer_mid := Control.new()
-	spacer_mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	spacer_mid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(spacer_mid)
-
-	var center := CenterContainer.new()
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(center)
-
+	var masthead := HBoxContainer.new()
+	vbox.add_child(masthead)
+	var brand := VBoxContainer.new()
+	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	masthead.add_child(brand)
+	var title := MenuArt.title_label_gold("BLACKWOOD", 66)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	brand.add_child(title)
+	var sub := MenuArt.title_label("E C O S   D O   B O S Q U E", 16)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	brand.add_child(sub)
+	var seal := Label.new()
+	seal.text = "A FLORESTA\nNÃO PERDOA"
+	seal.add_theme_color_override("font_color", ForestUI.GOLD)
+	seal.add_theme_font_size_override("font_size", 16)
+	seal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	masthead.add_child(seal)
+	var body_row := HBoxContainer.new()
+	body_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_row.add_theme_constant_override("separation", 28)
+	vbox.add_child(body_row)
 	var opts := VBoxContainer.new()
+	opts.custom_minimum_size.x = 310
+	opts.alignment = BoxContainer.ALIGNMENT_CENTER
 	opts.add_theme_constant_override("separation", 10)
-	center.add_child(opts)
-
-	_add_opt(opts, "⚔  Jogar  ✧", 0)
-	_add_opt(opts, "👥  Multiplayer  ✧", 1)
-	_add_opt(opts, "◆  Loja  ✧", 2)
-	_add_opt(opts, "⚙  Configurações  ✧", 3)
-	_add_opt(opts, "✕  Sair  ✧", 4)
-
-	var ess_row := HBoxContainer.new()
-	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	ess_row.add_theme_constant_override("separation", 6)
-	ess_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(ess_row)
-	var ess_icon := EssenceIcon.new()
-	ess_icon.custom_minimum_size = Vector2(20, 20)
-	ess_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ess_row.add_child(ess_icon)
-	_essence_label = Label.new()
-	_essence_label.add_theme_font_size_override("font_size", 15)
-	_essence_label.add_theme_color_override("font_color", Color(0.55, 0.85, 1))
-	_essence_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ess_row.add_child(_essence_label)
-
-	var hint := Label.new()
-	hint.text = "↑ ↓ escolher  •  ENTER confirmar"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
-	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(hint)
-
-	var ver := Label.new()
-	ver.text = "Blackwood v%s" % app_version()
-	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ver.add_theme_font_size_override("font_size", 11)
-	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
-	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(ver)
-
-	_update_btn = Button.new()
-	_update_btn.custom_minimum_size = Vector2(1, 40)
-	MenuArt.apply_small_btn(_update_btn, Color(0.4, 0.9, 0.45), 14)
-	_update_btn.visible = false
-	_update_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_update_btn.pressed.connect(func():
-		Sfx.play(self, "click")
-		OS.shell_open("https://github.com/Diasprogramador/blackwood/releases/latest")
-	)
-	vbox.add_child(_update_btn)
-	_check_update()
-
-	var login_row := HBoxContainer.new()
-	login_row.alignment = BoxContainer.ALIGNMENT_BEGIN
-	login_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(login_row)
-
+	body_row.add_child(opts)
+	opts.add_child(MenuArt.section_label("A SUA PRÓXIMA CAÇADA"))
+	_add_opt(opts, "Entrar no bosque", 0)
+	_add_opt(opts, "Jogar em grupo", 1)
+	_add_opt(opts, "Arsenal de essência", 2)
+	_add_opt(opts, "Configurações", 3)
+	_add_opt(opts, "Sair do jogo", 4)
+	var hero := CampPortrait.new()
+	hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hero.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body_row.add_child(hero)
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 18)
+	vbox.add_child(footer)
 	var login := Button.new()
-	login.text = "👤 %s" % Profiles.current_name()
-	login.custom_minimum_size = Vector2(220, 36)
-	MenuArt.apply_small_btn(login, Color(0.55, 0.85, 1), 13)
-	login.pressed.connect(func():
-		Sfx.play(self, "click")
-		login_pressed.emit()
-	)
-	login_row.add_child(login)
+	login.text = Profiles.current_name()
+	login.custom_minimum_size = Vector2(170, 44)
+	ForestUI.button(login)
+	login.pressed.connect(func(): login_pressed.emit())
+	footer.add_child(login)
+	_essence_label = Label.new()
+	_essence_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_essence_label.add_theme_color_override("font_color", ForestUI.MINT)
+	footer.add_child(_essence_label)
+	_update_btn = Button.new()
+	_update_btn.custom_minimum_size.y = 44
+	ForestUI.button(_update_btn)
+	_update_btn.visible = false
+	_update_btn.pressed.connect(func(): OS.shell_open("https://github.com/Diasprogramador/blackwood/releases/latest"))
+	footer.add_child(_update_btn)
+	var ver := Label.new()
+	ver.text = "ECOS DO BOSQUE • v%s" % app_version()
+	ver.add_theme_font_size_override("font_size", 12)
+	ver.add_theme_color_override("font_color", ForestUI.PAPER)
+	footer.add_child(ver)
+	_check_update()
 
 	_refresh()
 
 func _add_opt(parent: VBoxContainer, txt: String, idx: int) -> void:
 	var b := Button.new()
 	b.text = txt
-	b.custom_minimum_size = Vector2(300, 48)
+	b.icon = load("res://assets/icons/%s.svg" % ["hunt", "party", "shop", "settings", "exit"][idx])
+	b.expand_icon = true
+	b.add_theme_constant_override("icon_max_width", 28)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size = Vector2(310, 52)
 	MenuArt.apply_menu_btn(b, MenuArt.GOLD)
 	var i := idx
 	b.pressed.connect(func(): _activate(i))
@@ -254,3 +229,33 @@ func handle_key(key: int) -> bool:
 		return false
 	_refresh()
 	return true
+
+class CampPortrait extends Control:
+	var figures: Array[Sprite2D] = []
+	func _ready() -> void:
+		for role in ["marksman", "tank", "mage"]:
+			var sprite := Sprite2D.new()
+			sprite.texture = CanvaSprites.frame(role, 0)
+			sprite.material = CanvaSprites.material()
+			add_child(sprite)
+			figures.append(sprite)
+		resized.connect(_layout)
+		_layout()
+	func _layout() -> void:
+		for i in figures.size():
+			var k := minf(size.x / 460.0, size.y / 380.0)
+			figures[i].scale = Vector2.ONE * k * (1.9 if i == 1 else 1.5)
+			figures[i].position = Vector2(size.x * (0.21 + i * 0.29), size.y * 0.45)
+		queue_redraw()
+	func _draw() -> void:
+		var c := Vector2(size.x * 0.5, size.y * 0.72)
+		ArtUtil.fill_ellipse(self, c.x, c.y, size.x * 0.46, 32, Color(ForestUI.INK, 0.8))
+		draw_arc(c, size.x * 0.35, PI, TAU, 40, Color(ForestUI.GOLD, 0.4), 2)
+		var font := ThemeDB.fallback_font
+		var text := "CINCO GUARDIÕES. UMA ÚLTIMA FOGUEIRA."
+		var fs := 13
+		var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		draw_string(font, Vector2((size.x - width) / 2, size.y - 40), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ForestUI.GOLD)
+		text = "Sobreviva às hordas. Escolha sua evolução."
+		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		draw_string(font, Vector2((size.x - width) / 2, size.y - 18), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ForestUI.PAPER)

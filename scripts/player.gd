@@ -8,7 +8,7 @@ signal died
 signal leveled_up(msg: String)
 signal gold_changed(gold: int)
 
-var champ_name := "Garen"
+var champ_name := "Arlen"
 var role := "tank"
 
 var level := 1
@@ -24,6 +24,17 @@ var gold := 200
 var crit_chance := 0.15
 var mana_regen := 1.0
 var attack_range := 70
+var attack_speed_mult := 1.0
+var move_speed_mult := 1.0
+var strike_count := 1
+var aura_rank := 0
+var aura_cd := 0.0
+var run_upgrade_counts: Dictionary = {}
+var dash_enabled := true
+var dash_cd := 0.0
+var dash_t := 0.0
+var invulnerable_t := 0.0
+var _dash_direction := Vector2.RIGHT
 
 ## Habilidades desbloqueadas (no menu, com ◆). Começa vazia: só ATK básico.
 ## Cada item: {cfg, cd_left}. Máximo = ChampData.SKILL_SLOTS (5, teclas 1-5).
@@ -40,6 +51,7 @@ signal item_used(item: Item)
 signal inventory_changed()
 
 var facing := 1
+var look_direction := Vector2.RIGHT
 var moving := false
 var walk_phase := 0.0
 var attack_cd := 0.0
@@ -55,6 +67,7 @@ var spr_scale := 1.0
 var spr_folder := "garen"
 var has_sprites := false
 var _pose := ""
+var _pose_elapsed := 0.0
 var attack_t := 0.0
 var hurt_t := 0.0
 var cast_t := 0.0
@@ -116,6 +129,15 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 	role = p_role
 	var rs: Dictionary = ChampData.ROLES[role]
 	level = 1
+	attack_speed_mult = 1.0
+	move_speed_mult = 1.0
+	strike_count = 1
+	aura_rank = 0
+	aura_cd = 0.0
+	run_upgrade_counts.clear()
+	dash_cd = 0.0
+	dash_t = 0.0
+	invulnerable_t = 0.0
 	xp = 0
 	max_hp = rs.hp
 	hp = max_hp
@@ -140,6 +162,7 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 	armor = null
 	give_starting_items()
 	facing = 1
+	look_direction = Vector2.RIGHT
 	attack_cd = 0.0
 	punch_t = 0.0
 	hit_flash = 0
@@ -154,19 +177,24 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 	flip = 1.0
 	vel = Vector2.ZERO
 	_pose = ""
-	# Sprites do kit (com fallback procedural se faltar arquivo).
 	_ensure_body()
-	spr_folder = str(SpriteKit.CHAMP_BY_ROLE.get(role, "garen"))
-	has_sprites = SpriteKit.tex(SpriteKit.champ_pose(role, "idle")) != null
-	if has_sprites:
-		spr_scale = SpriteKit.fit(body, SpriteKit.champ_pose(role, "idle"), SpriteKit.CHAMP_H)
-		sh_w = 22.0
-		body.modulate = Color.WHITE
-		body.rotation = 0.0
+	has_sprites = true
+	spr_scale = 0.68
+	_pose_elapsed = 0.0
+	body.texture = CanvaSprites.frame(role, 0)
+	body.material = CanvaSprites.material()
+	body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	body.offset = Vector2(0, -70)
+	body.scale = Vector2(-spr_scale, spr_scale)
+	sh_w = 22.0
+	body.modulate = Color.WHITE
+	body.rotation = 0.0
 	queue_redraw()
 
 func _process(delta: float) -> void:
 	var d := minf(delta, 0.05)
+	dash_cd = maxf(0.0, dash_cd - delta)
+	invulnerable_t = maxf(0.0, invulnerable_t - delta)
 	if attack_cd > 0: attack_cd -= d
 	if punch_t > 0: punch_t = maxf(0.0, punch_t - d / 0.2)
 	if attack_t > 0: attack_t = maxf(0.0, attack_t - d)
@@ -225,7 +253,10 @@ func _update_body(d: float) -> void:
 		pose = "walk"
 	if pose != _pose:
 		_pose = pose
-		SpriteKit.swap(body, SpriteKit.champ_pose(role, pose))
+		_pose_elapsed = 0.0
+	else:
+		_pose_elapsed += d
+	body.texture = CanvaSprites.frame(role, CanvaSprites.pose_index(pose, _pose_elapsed))
 	var spd := vel.length()
 	bob_t += d * (4.0 + spd * 0.045)
 	var bob := 0.0
@@ -239,17 +270,15 @@ func _update_body(d: float) -> void:
 	var lunge := 0.0
 	if attack_t > 0.0:
 		lunge = 10.0 * (attack_t / 0.22)
-	var kx := 0.18 * squash
-	var ky := -0.14 * squash
 	var fall := 0.0
 	var fade := 1.0
 	if not is_alive():
 		var k := clampf(death_t / 0.4, 0.0, 1.0)
 		fall = 1.5 * k * float(facing)
 		fade = 1.0 - clampf((death_t - 0.5) / 1.0, 0.0, 1.0)
-	body.position = Vector2(lunge * flip, bob)
-	body.rotation = lean + fall
-	body.scale = Vector2(-flip * spr_scale * (1.0 + kx), spr_scale * (1.0 + ky))
+	body.position = Vector2(roundf(lunge * facing), roundf(bob))
+	body.rotation = fall
+	body.scale = Vector2(-float(facing) * spr_scale, spr_scale)
 	if hurt_t > 0.0:
 		body.modulate = Color(1, 0.45, 0.45)
 	elif not is_alive():
@@ -270,7 +299,7 @@ func _spawn_channel_part(d: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	var d := minf(delta, 0.05)
-	if not controlled or channeling or world == null:
+	if not is_alive() or not controlled or channeling or world == null:
 		# Desacelera suave até parar (sem trava seca).
 		vel = vel.lerp(Vector2.ZERO, 1.0 - exp(-12.0 * d))
 		moving = false
@@ -292,12 +321,16 @@ func _physics_process(delta: float) -> void:
 		if dir.x > 0: facing = 1
 		elif dir.x < 0: facing = -1
 		dir = dir.normalized()
+		look_direction = dir
 		walk_phase += 0.3 * d * 60.0
 	else:
 		walk_phase += 0.06 * d * 60.0
 	# Velocidade com aceleração/desaceleração exponencial: natural, sem snap.
-	var target := dir * SPEED if pushing else Vector2.ZERO
+	var target := dir * SPEED * move_speed_mult if pushing else Vector2.ZERO
 	vel = vel.lerp(target, 1.0 - exp(-12.0 * d))
+	if dash_t > 0.0:
+		dash_t = maxf(0.0, dash_t - d)
+		vel = _dash_direction * SPEED * move_speed_mult * 3.2
 	moving = vel.length() > 25.0
 
 	var step := vel * d
@@ -370,6 +403,17 @@ func _held(action_id: String) -> bool:
 			return true
 	return false
 
+func try_dash() -> bool:
+	if not dash_enabled or not is_alive() or channeling or dash_cd > 0.0:
+		return false
+	_dash_direction = vel.normalized() if vel.length_squared() > 1.0 else look_direction
+	if touch_move != Vector2.ZERO:
+		_dash_direction = touch_move.normalized()
+	dash_t = 0.16
+	dash_cd = 1.6
+	invulnerable_t = 0.22
+	return true
+
 # =====================================================================
 #  COMBATE
 # =====================================================================
@@ -377,11 +421,14 @@ func is_alive() -> bool:
 	return hp > 0
 
 func take_damage(raw: int) -> int:
+	if not is_alive() or invulnerable_t > 0.0:
+		return 0
 	var reduction := defense / float(defense + 100)
 	var final_d := maxi(1, int(raw * (1.0 - reduction)))
 	hp = maxi(0, hp - final_d)
 	hit_flash = 8
 	hurt_t = 0.3
+	invulnerable_t = 0.3
 	squash = 1.0
 	queue_redraw()
 	if hp <= 0:
@@ -409,7 +456,7 @@ func toggle_channel() -> bool:
 
 ## Ataca o alvo mais próximo dentro do alcance. Retorna o alvo ou null.
 func basic_attack(enemies: Array) -> Variant:
-	if attack_cd > 0.0 or channeling:
+	if not is_alive() or attack_cd > 0.0 or channeling:
 		return null
 	var target = nearest_enemy(enemies, attack_range)
 	if target == null:
@@ -419,12 +466,20 @@ func basic_attack(enemies: Array) -> Variant:
 	var dealt: int = target.take_damage(raw)
 	if is_crit:
 		dealt += target.take_damage(int(raw / 2.0))
-	attack_cd = ATTACK_CD
+	attack_cd = ATTACK_CD / attack_speed_mult
 	punch_t = 1.0
 	attack_t = 0.22
 	squash = 1.0
 	queue_redraw()
-	return { target = target, crit = is_crit, dmg = dealt }
+	var hits: Array = [{ target = target, crit = is_crit, dmg = dealt }]
+	for e in enemies:
+		if hits.size() >= strike_count:
+			break
+		if not is_instance_valid(e) or e == target or not e.is_alive():
+			continue
+		if position.distance_squared_to(e.position) < float(attack_range * attack_range):
+			hits.append({ target = e, crit = false, dmg = e.take_damage(calc_damage()) })
+	return { target = target, crit = is_crit, dmg = dealt, hits = hits }
 
 func cast_skill(index: int, enemies: Array) -> Dictionary:
 	if index >= skills.size():
@@ -463,7 +518,7 @@ func nearest_enemy(enemies: Array, range_px: float) -> Variant:
 	var best = null
 	var best_d := range_px
 	for e in enemies:
-		if not e.is_alive():
+		if not is_instance_valid(e) or not e.is_alive():
 			continue
 		var d := position.distance_to(e.position)
 		if d < best_d:
@@ -484,12 +539,10 @@ func gain_exp(amount: int) -> String:
 		msg = "LEVEL UP! Lv.%d  +%d HP  +%d ATK  +%d DEF  +%d MAG" % [
 			level, maxi(8, int(max_hp / 8.0)), maxi(1, int(attack / 6.0)), maxi(1, int(defense / 6.0)), maxi(1, int(magic / 6.0))
 		]
-	leveled_up.emit(msg)
 	return msg
 
 func exp_to_next() -> int:
-	# Curva dura: L1=180, L2=285, L3=440, L4=645... (~2-3 ups por run).
-	return 100 + level * 80 + (level - 1) * (level - 1) * 25
+	return 24 + level * 12 + (level - 1) * (level - 1) * 3
 
 func _on_level_up() -> void:
 	var hp_gain := maxi(8, int(max_hp / 8.0))
@@ -502,6 +555,7 @@ func _on_level_up() -> void:
 	# Level up cura 60% em vez de 100% (jogo mais difícil).
 	hp = mini(max_hp, hp + int(max_hp * 0.6))
 	mana = max_mana
+	leveled_up.emit("Nível %d! Escolha seu próximo poder." % level)
 
 func upgrade_cost(type_idx: int) -> int:
 	var base: int = ChampData.UPGRADE_BASE_COST[type_idx]
@@ -651,6 +705,12 @@ func shop_catalog() -> Array:
 #  DESENHO (sombra + fallback procedural; o corpo é o Sprite2D `body`)
 # =====================================================================
 func _draw() -> void:
+	if aura_rank > 0 and is_alive():
+		var radius := 64.0 + aura_rank * 12.0
+		draw_arc(Vector2.ZERO, radius, 0, TAU, 48, Color(0.55, 0.9, 0.4, 0.55), 2.0)
+		for i in 6:
+			var angle := walk_phase * 0.2 + i * TAU / 6.0
+			draw_circle(Vector2.from_angle(angle) * radius, 3, Color(0.7, 1, 0.4, 0.8))
 	# Sombra suave no chão (acompanha a largura do sprite).
 	ArtUtil.fill_ellipse(self, 0, 10, sh_w, sh_w * 0.32, Color(0, 0, 0, 0.32))
 

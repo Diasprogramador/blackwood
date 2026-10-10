@@ -5,7 +5,7 @@ extends Object
 ## fogueira acesa, pinheiros em silhueta e vinheta escura. Tudo procedural.
 
 const CREAM := Color(0.96, 0.90, 0.74)
-const GOLD := Color(1.0, 0.85, 0.4)
+const GOLD := ForestUI.GOLD
 const DIM := Color(0.7, 0.68, 0.62)
 
 ## Acumulador compartilhado do fundo animado dos menus (só um fica visível).
@@ -195,12 +195,12 @@ static func _draw_vignette(node: CanvasItem, w: float, h: float) -> void:
 # ---------------------------------------------------------------------
 static func style_panel() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.06, 0.08, 0.92)
+	sb.bg_color = ForestUI.INK
 	sb.border_color = Color(0.79, 0.64, 0.30)
 	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(14)
+	sb.set_corner_radius_all(0)
 	sb.shadow_color = Color(0, 0, 0, 0.6)
-	sb.shadow_size = 12
+	sb.shadow_size = 3
 	return sb
 
 static func style_btn(accent: Color, selected: bool) -> StyleBoxFlat:
@@ -210,12 +210,12 @@ static func style_btn(accent: Color, selected: bool) -> StyleBoxFlat:
 		sb.border_color = accent
 		sb.set_border_width_all(2)
 	else:
-		sb.bg_color = Color(0.07, 0.08, 0.11, 0.90)
-		sb.border_color = Color(0.35, 0.33, 0.30)
+		sb.bg_color = ForestUI.PANEL
+		sb.border_color = ForestUI.EDGE
 		sb.set_border_width_all(1)
-	sb.set_corner_radius_all(10)
+	sb.set_corner_radius_all(0)
 	sb.shadow_color = Color(0, 0, 0, 0.45)
-	sb.shadow_size = 6
+	sb.shadow_size = 3
 	sb.shadow_offset = Vector2(0, 2)
 	sb.content_margin_left = 16
 	sb.content_margin_right = 16
@@ -228,7 +228,7 @@ static func apply_menu_btn(b: Button, accent: Color) -> void:
 	b.add_theme_stylebox_override("hover", style_btn(accent, true))
 	b.add_theme_stylebox_override("pressed", style_btn(GOLD, true))
 	b.add_theme_stylebox_override("disabled", style_btn(Color(0.4, 0.4, 0.42), false))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("focus", ForestUI.style(Color.TRANSPARENT, accent, 0))
 	b.add_theme_color_override("font_color", CREAM)
 	b.add_theme_color_override("font_hover_color", GOLD)
 	b.add_theme_color_override("font_pressed_color", GOLD)
@@ -298,9 +298,9 @@ static func style_card(accent: Color, selected: bool) -> StyleBoxFlat:
 	sb.bg_color = Color(0.14, 0.13, 0.20, 0.98) if selected else Color(0.10, 0.10, 0.16, 0.95)
 	sb.border_color = Color(1, 0.85, 0.3) if selected else accent.darkened(0.25)
 	sb.set_border_width_all(3 if selected else 2)
-	sb.set_corner_radius_all(12)
+	sb.set_corner_radius_all(0)
 	sb.shadow_color = Color(1, 0.85, 0.3, 0.35) if selected else Color(accent, 0.25)
-	sb.shadow_size = 12 if selected else 6
+	sb.shadow_size = 3 if selected else 6
 	sb.content_margin_top = 8.0
 	sb.content_margin_bottom = 8.0
 	sb.content_margin_left = 8.0
@@ -316,10 +316,10 @@ static func style_row(accent: Color, hover := false, pressed := false) -> StyleB
 		sb.bg_color = Color(0.14, 0.15, 0.18, 0.97)
 	else:
 		sb.bg_color = Color(0.09, 0.10, 0.13, 0.95)
-	sb.border_color = Color(0.35, 0.33, 0.30) if not hover and not pressed else accent
+	sb.border_color = ForestUI.EDGE if not hover and not pressed else accent
 	sb.set_border_width_all(1)
 	sb.border_width_left = 5
-	sb.set_corner_radius_all(8)
+	sb.set_corner_radius_all(0)
 	sb.content_margin_left = 12
 	sb.content_margin_right = 12
 	sb.content_margin_top = 8
@@ -331,7 +331,7 @@ static func apply_row_btn(b: Button, accent: Color) -> void:
 	b.add_theme_stylebox_override("hover", style_row(accent, true))
 	b.add_theme_stylebox_override("pressed", style_row(accent, false, true))
 	b.add_theme_stylebox_override("disabled", style_row(Color(0.4, 0.4, 0.42)))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("focus", ForestUI.style(Color.TRANSPARENT, accent, 0))
 	b.add_theme_color_override("font_color", CREAM)
 	b.add_theme_color_override("font_hover_color", Color.WHITE)
 	b.add_theme_color_override("font_pressed_color", GOLD)
@@ -491,7 +491,7 @@ static func style_keycap(capturing := false) -> StyleBoxFlat:
 	sb.border_color = Color(0.25, 0.22, 0.18)
 	sb.set_border_width_all(2)
 	sb.border_width_bottom = 4
-	sb.set_corner_radius_all(6)
+	sb.set_corner_radius_all(0)
 	sb.shadow_color = Color(0, 0, 0, 0.4)
 	sb.shadow_size = 4
 	sb.content_margin_left = 10
@@ -509,7 +509,7 @@ static func apply_keycap(b: Button, capturing := false) -> void:
 	hv.border_color = Color(1, 0.85, 0.4)
 	b.add_theme_stylebox_override("hover", hv)
 	b.add_theme_stylebox_override("disabled", style_keycap())
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("focus", ForestUI.style(Color.TRANSPARENT, GOLD, 0))
 	b.add_theme_color_override("font_color", Color(0.15, 0.12, 0.1))
 	b.add_theme_color_override("font_hover_color", Color(0.1, 0.08, 0.06))
 	b.add_theme_color_override("font_pressed_color", Color(0.1, 0.08, 0.06))

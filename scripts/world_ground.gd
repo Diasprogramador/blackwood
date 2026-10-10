@@ -6,6 +6,7 @@ extends Node2D
 
 var world: World
 var stage_palette: Dictionary = {}
+var cached_texture: Texture2D
 
 func _base_grass() -> Color:
 	return stage_palette.get("grass", Color(0.16, 0.42, 0.16))
@@ -20,6 +21,9 @@ func _ready() -> void:
 	z_index = -10
 
 func _draw() -> void:
+	if cached_texture != null:
+		draw_texture(cached_texture, Vector2.ZERO)
+		return
 	if world == null or world.tiles.is_empty():
 		return
 	var TILE := World.TILE

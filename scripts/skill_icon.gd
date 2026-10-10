@@ -74,37 +74,25 @@ static func heal_effect_for(role: String) -> int:
 ## Placa retangular do slot: gradiente, chanfro, borda na cor da raridade.
 static func draw_slot_bg(node: CanvasItem, x: float, y: float, w: float, h: float,
 		rarity: Color, ready: bool, accent: Color) -> void:
-	var top := Color(0.20, 0.21, 0.25) if ready else Color(0.15, 0.14, 0.16)
-	var bot := Color(0.07, 0.08, 0.10) if ready else Color(0.06, 0.05, 0.06)
-	if ready:
-		top = ArtUtil.mix(top, accent, 0.22)
-		bot = ArtUtil.mix(bot, accent, 0.10)
-	ArtUtil.shade_poly(node, ArtUtil.rrect_pts(x, y, w, h, 7.0), top, bot)
-	# brilho interno no topo
-	if GameSettings.quality_cache < 2:
-		ArtUtil.stroke_rrect(node, x + 1.5, y + 1.5, w - 3.0, h * 0.45, 5.0,
-			Color(1, 1, 1, 0.10 if ready else 0.05), 1.2)
-	var bcol := rarity if ready else Color(0.42, 0.42, 0.46)
-	var bw := 2.0 if ready else 1.4
-	if ready and GameSettings.quality_cache < 2:
-		ArtUtil.stroke_rrect(node, x - 1.0, y - 1.0, w + 2.0, h + 2.0, 8.0,
-			Color(bcol.r, bcol.g, bcol.b, 0.35), 4.0)
-	ArtUtil.stroke_rrect(node, x, y, w, h, 7.0, bcol, bw)
+	var edge := rarity if ready else ForestUI.EDGE
+	node.draw_rect(Rect2(x, y, w, h), ForestUI.INK)
+	node.draw_rect(Rect2(x + 2, y + 2, w - 4, h - 4), ForestUI.PANEL.lerp(accent, 0.16 if ready else 0.03))
+	node.draw_rect(Rect2(x, y, w, h), edge, false, 2)
+	node.draw_rect(Rect2(x + 4, y + 3, w - 8, 2), Color(edge, 0.5))
 
 ## Placa redonda dos botões de toque.
 static func draw_round_bg(node: CanvasItem, c: Vector2, r: float, accent: Color,
 		ready: bool, down: bool) -> void:
-	var top := Color(0.22, 0.23, 0.27) if ready else Color(0.15, 0.14, 0.16)
-	var bot := Color(0.06, 0.07, 0.09) if ready else Color(0.06, 0.05, 0.06)
-	if ready:
-		top = ArtUtil.mix(top, accent, 0.25)
-	ArtUtil.shade_ellipse(node, c.x, c.y, r, r, top, bot)
-	if ready and GameSettings.quality_cache < 2:
-		ArtUtil.fill_ellipse(node, c.x, c.y, r * 1.14, r * 1.14, Color(accent, 0.22))
-		ArtUtil.shade_ellipse(node, c.x, c.y, r * 1.0, r * 1.0, top, bot)
-	var a := 0.85 if down else 0.55
-	node.draw_arc(c, r - 1.0, 0, TAU, 24, Color(accent, a if ready else 0.3), 2.2)
-	node.draw_arc(c, r - 1.0, -2.4, -0.7, 10, Color(1, 1, 1, 0.35 if ready else 0.12), 1.6)
+	var points := PackedVector2Array()
+	for i in 12:
+		points.append(c + Vector2.from_angle(TAU * i / 12.0 + PI / 12.0) * r)
+	node.draw_colored_polygon(points, Color(ForestUI.INK if not down else ForestUI.PANEL.lightened(0.2), accent.a))
+	points.append(points[0])
+	node.draw_polyline(points, Color(ForestUI.GOLD if down else ForestUI.EDGE, accent.a), 2.0)
+	node.draw_arc(c, r - 5, 0, TAU, 24, Color(accent, accent.a * (0.65 if ready else 0.25)), 1.5)
+	for i in 4:
+		var point := c + Vector2.from_angle(i * PI / 2) * (r - 2)
+		node.draw_rect(Rect2(point - Vector2.ONE * 1.5, Vector2.ONE * 3), Color(ForestUI.GOLD, accent.a))
 
 # ----------------------------------------------------------------------
 #  Desenho (HUD / toque)

@@ -66,6 +66,15 @@ func build(d: Dictionary) -> void:
 	_add_toggle(box, "Mostrar FPS", "show_fps")
 
 	_add_section(box, "— HUD TOUCH —")
+	var edit_hud := Button.new()
+	edit_hud.text = "Personalizar HUD • mover, tamanho e opacidade"
+	edit_hud.custom_minimum_size.y = 48
+	ForestUI.button(edit_hud)
+	edit_hud.pressed.connect(func():
+		var editor := HudEditor.new()
+		editor.data = data
+		add_child(editor))
+	box.add_child(edit_hud)
 	_add_toggle(box, "Barra de skills", "hud_bar")
 	_add_cycle(box, "Tamanho dos botões", "touch_size", ["Pequeno", "Médio", "Grande"])
 	_add_cycle(box, "Lado do joystick", "touch_side", ["Esquerda", "Direita"])
@@ -314,6 +323,11 @@ func _draw() -> void:
 	MenuArt.draw_screen_frame(self, size)
 
 func handle_key(key: int) -> bool:
+	for child in get_children():
+		if child is HudEditor:
+			if key == KEY_ESCAPE:
+				child.queue_free()
+			return true
 	if _capturing != "":
 		return true
 	if key == KEY_ESCAPE:

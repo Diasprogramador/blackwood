@@ -21,6 +21,7 @@ const T_WATER := 2
 const T_TREE := 3
 const T_ROCK := 4
 
+var navigation: ForestNavigation
 var tiles: Array = []
 var _water_tiles: Array[Vector2i] = []
 ## tile -> prop (TreeProp/RockProp) que ocupa; usado pela oclusão de personagens.
@@ -32,6 +33,9 @@ var ground: Node2D
 var water_fx: Node2D
 var props: Node2D
 var stage_palette: Dictionary = {}
+var _generation := 0
+var _prop_textures: Array[AtlasTexture] = []
+var enemy_textures: Dictionary = {}
 
 func _ready() -> void:
 	ground = WorldGround.new()
@@ -58,6 +62,8 @@ func apply_stage(stage_idx: int) -> void:
 		ground.queue_redraw()
 
 func generate(seed_value: int = -1) -> void:
+	_generation += 1
+	(ground as WorldGround).cached_texture = null
 	if seed_value < 0:
 		_rng.randomize()
 	else:
@@ -77,6 +83,7 @@ func generate(seed_value: int = -1) -> void:
 	_scatter_forests()
 	_build_border()
 	_connect_regions()
+	navigation = ForestNavigation.new(self)
 
 	# limpa props anteriores
 	for c in props.get_children():
@@ -127,6 +134,104 @@ func generate(seed_value: int = -1) -> void:
 
 	ground.queue_redraw()
 	water_fx.queue_redraw()
+	_bake_scenery.call_deferred(_generation)
+
+## Rasterize static procedural art once, preserving depth and prop occlusion.
+## A generation token prevents an old async bake from replacing a new map.
+func _bake_scenery(generation: int) -> void:
+	if generation != _generation or DisplayServer.get_name() == "headless":
+		return
+	var viewport := _bake_viewport(Vector2i(MAP_W * TILE, MAP_H * TILE))
+	var painter := WorldGround.new()
+	painter.world = self
+	painter.stage_palette = stage_palette.duplicate()
+	viewport.add_child(painter)
+	await RenderingServer.frame_post_draw
+	if generation == _generation:
+		(ground as WorldGround).cached_texture = ImageTexture.create_from_image(viewport.get_texture().get_image())
+		ground.queue_redraw()
+	viewport.queue_free()
+	if generation != _generation:
+		return
+	if _prop_textures.is_empty():
+		var atlas_view := _bake_viewport(Vector2i(12 * 96, 2 * 96))
+		for i in 18:
+			var prop: Node2D = TreeProp.new() if i < 12 else RockProp.new()
+			prop.variant = i if i < 12 else i - 12
+			prop.position = Vector2((i % 12) * 96 + 48, (i / 12) * 96 + 80)
+			atlas_view.add_child(prop)
+			if prop is TreeProp:
+				prop._scale = 1.0
+				prop.queue_redraw()
+		await RenderingServer.frame_post_draw
+		if generation != _generation:
+			atlas_view.queue_free()
+			return
+		var atlas := ImageTexture.create_from_image(atlas_view.get_texture().get_image())
+		_prop_textures.clear()
+		for i in 18:
+			var texture := AtlasTexture.new()
+			texture.atlas = atlas
+			texture.region = Rect2((i % 12) * 96, (i / 12) * 96, 96, 96)
+			_prop_textures.append(texture)
+		atlas_view.queue_free()
+	if generation != _generation:
+		return
+	for prop in props.get_children():
+		if prop.is_queued_for_deletion():
+			continue
+		if prop is TreeProp:
+			prop.cached_texture = _prop_textures[prop.variant % 12]
+		elif prop is RockProp:
+			prop.cached_texture = _prop_textures[12 + prop.variant % 6]
+		prop.queue_redraw()
+	if enemy_textures.is_empty():
+		await _bake_enemy_art(generation)
+
+## Four reusable walking poses per enemy and stage. This is the game's own
+## procedural art; no external textures are introduced.
+func _bake_enemy_art(generation: int) -> void:
+	var viewport := _bake_viewport(Vector2i(8 * 192, 9 * 192))
+	for stage in 3:
+		for kind in EnemyData.ORDER.size():
+			for pose in 4:
+				var index := (stage * 6 + kind) * 4 + pose
+				var frame := EnemyArtFrame.new()
+				frame.type_key = EnemyData.ORDER[kind]
+				frame.color = EnemyData.TYPES[frame.type_key].color
+				if stage == 1:
+					frame.color = frame.color.lerp(Color(1, 0.55, 0.25), 0.3)
+				elif stage == 2:
+					frame.color = frame.color.lerp(Color(0.7, 0.4, 1), 0.3)
+				frame.phase = pose * TAU / 4.0
+				frame.position = Vector2((index % 8) * 192 + 96, (index / 8) * 192 + 96)
+				viewport.add_child(frame)
+	await RenderingServer.frame_post_draw
+	if generation != _generation:
+		viewport.queue_free()
+		return
+	var atlas := ImageTexture.create_from_image(viewport.get_texture().get_image())
+	for stage in 3:
+		for kind in EnemyData.ORDER.size():
+			var frames: Array[AtlasTexture] = []
+			for pose in 4:
+				var index := (stage * 6 + kind) * 4 + pose
+				var texture := AtlasTexture.new()
+				texture.atlas = atlas
+				texture.region = Rect2((index % 8) * 192, (index / 8) * 192, 192, 192)
+				frames.append(texture)
+			enemy_textures["%s:%d" % [EnemyData.ORDER[kind], stage]] = frames
+	viewport.queue_free()
+
+func _bake_viewport(size_px: Vector2i) -> SubViewport:
+	var viewport := SubViewport.new()
+	viewport.size = size_px
+	viewport.disable_3d = true
+	viewport.transparent_bg = true
+	viewport.world_2d = World2D.new()
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(viewport)
+	return viewport
 
 # ---------------------------------------------------------------------
 #  GERAÇÃO

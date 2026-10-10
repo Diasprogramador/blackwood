@@ -4,15 +4,15 @@ extends Object
 ## Dados dos campeões/roles — port dos enums Java (Role + skills do GamePanel).
 
 const CHAMPS := [
-	{ nome = "Garen", role = "tank", desc = "Tanque blindado,\nresiste a tudo",
+	{ nome = "Arlen", role = "tank", desc = "Guardião do bosque,\nresiste a tudo",
 	  color = Color(0.27, 0.39, 0.71) },
-	{ nome = "Zed", role = "assassin", desc = "Dano explosivo,\nmuito frágil",
+	{ nome = "Nyra", role = "assassin", desc = "Dano explosivo,\nmuito frágil",
 	  color = Color(0.2, 0.2, 0.24) },
-	{ nome = "Ahri", role = "mage", desc = "Dano mágico alto,\nhabilidades arcanas",
+	{ nome = "Mira", role = "mage", desc = "Dano mágico alto,\nhabilidades arcanas",
 	  color = Color(0.59, 0.27, 0.78) },
-	{ nome = "Ashe", role = "marksman", desc = "Dano físico constante,\nbom de kiting",
+	{ nome = "Kael", role = "marksman", desc = "Dano físico constante,\nbom de kiting",
 	  color = Color(0.2, 0.63, 0.35) },
-	{ nome = "Janna", role = "support", desc = "Cura e proteção,\nsuporte time",
+	{ nome = "Eira", role = "support", desc = "Cura e proteção,\nsuporte time",
 	  color = Color(0.27, 0.71, 0.71) },
 ]
 
@@ -35,7 +35,7 @@ const ROLES := {
 			{ name = "Fúria de Ferro", kind = "damage", mana = 22, power = 34, cd = 7.0, rarity = 1, price = 70, desc = "Esmaga com o escudo." },
 			{ name = "Impacto Sísmico", kind = "damage", mana = 30, power = 52, cd = 13.0, rarity = 2, price = 140, desc = "O chão treme." },
 			{ name = "Cólera do Colosso", kind = "damage", mana = 40, power = 78, cd = 21.0, rarity = 3, price = 240, desc = "Fúria imparável." },
-			{ name = "Julgamento de Demacia", kind = "damage", mana = 55, power = 115, cd = 34.0, rarity = 4, price = 400, desc = "O veredito final." },
+			{ name = "Julgamento do Bosque", kind = "damage", mana = 55, power = 115, cd = 34.0, rarity = 4, price = 400, desc = "O veredito final." },
 		],
 	},
 	"assassin": {

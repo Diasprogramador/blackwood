@@ -36,6 +36,7 @@ class Portrait extends Control:
 			var aura := 44.0 + sin(tick * 0.1) * 7.0
 			draw_circle(Vector2(cx, cy), aura, Color(accent.r, accent.g, accent.b, 0.25))
 		if tex != null:
+			tex = CanvaSprites.frame(role, CanvaSprites.pose_index("walk" if active else "idle", tick / 60.0))
 			var tw := float(tex.get_width())
 			var th := float(tex.get_height())
 			var sc := minf(size.x / tw, maxf(40.0, size.y - 8.0) / th)
@@ -201,7 +202,9 @@ func _make_card(c: Dictionary, i: int) -> PanelContainer:
 	var portrait := Portrait.new()
 	portrait.role = c.role
 	portrait.accent = c.color
-	portrait.tex = SpriteKit.tex(SpriteKit.champ_pose(c.role, "idle"))
+	portrait.tex = CanvaSprites.frame(c.role, 0)
+	portrait.material = CanvaSprites.material()
+	portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	portrait.custom_minimum_size = Vector2(CARD_W - 16, 110)
 	portrait.size_flags_horizontal = Control.SIZE_EXPAND_FILL

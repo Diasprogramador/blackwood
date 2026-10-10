@@ -16,6 +16,7 @@ const ACTIONS := [
 	{ id = "move_left", label = "Mover: esquerda", def = [KEY_A, KEY_LEFT] },
 	{ id = "move_right", label = "Mover: direita", def = [KEY_D, KEY_RIGHT] },
 	{ id = "attack", label = "Ataque básico", def = [KEY_SPACE] },
+	{ id = "dash", label = "Esquiva (solo)", def = [KEY_SHIFT] },
 	{ id = "skill1", label = "Habilidade 1", def = [KEY_1] },
 	{ id = "skill2", label = "Habilidade 2", def = [KEY_2] },
 	{ id = "skill3", label = "Habilidade 3", def = [KEY_3] },
@@ -36,7 +37,7 @@ static func default_data() -> Dictionary:
 		"master": 80, "music": 70, "sfx": 90,
 		"fullscreen": false, "shake": true, "touch": 0,
 		"quality": 2 if OS.has_feature("mobile") else 1, "touch_size": 1, "touch_side": 0,
-		"hud_bar": true, "show_fps": false,
+		"touch_layout": {}, "hud_bar": true, "show_fps": false,
 		"vsync": true, "fps_limit": 60,
 		"keys": keys,
 	}
@@ -59,6 +60,9 @@ static func load_data() -> Dictionary:
 	d["show_fps"] = bool(cfg.get_value("video", "show_fps", false))
 	d["vsync"] = bool(cfg.get_value("video", "vsync", true))
 	d["fps_limit"] = clampi(int(cfg.get_value("video", "fps_limit", 60)), 0, 1000)
+	var layout = cfg.get_value("touch", "layout", {})
+	if layout is Dictionary:
+		d["touch_layout"] = layout
 	quality_cache = int(d["quality"])
 	var keys: Dictionary = d["keys"]
 	for a in ACTIONS:
@@ -72,6 +76,7 @@ static func load_data() -> Dictionary:
 
 static func save_data(d: Dictionary) -> void:
 	var cfg := ConfigFile.new()
+	cfg.set_value("touch", "layout", d.get("touch_layout", {}))
 	cfg.set_value("audio", "master", int(d.get("master", 80)))
 	cfg.set_value("audio", "music", int(d.get("music", 70)))
 	cfg.set_value("audio", "sfx", int(d.get("sfx", 90)))

@@ -21,7 +21,7 @@ func add_message(text: String) -> void:
 			m.life = 1.5
 			return
 	messages.append({ base = text, count = 1, life = 1.5 })
-	while messages.size() > 6:
+	while messages.size() > 3:
 		messages.pop_front()
 
 func clear_messages() -> void:
@@ -63,43 +63,22 @@ func _draw() -> void:
 
 # ---------------------------------------------------------------------
 func _draw_top_left(p: Player) -> void:
-	var x := 12.0
-	var y := 12.0
-	var bw := 250.0
-	# A linha de canalização é extra: sem crescer o cartão ela caía FORA dele
-	# e batia no painel do primeiro aliado.
-	var card_h := 94.0
-	if p.channeling:
-		card_h = 116.0
-
-	ArtUtil.fill_rrect(self, x - 6, y - 6, bw + 12, card_h, 8, Color(0, 0, 0, 0.66))
-	ArtUtil.stroke_rrect(self, x - 6, y - 6, bw + 12, card_h, 8, Color(1, 1, 1, 0.18), 1)
-
+	var x := 20.0
+	var y := 20.0
+	var bw := 264.0
+	var card_h := 130.0 if p.channeling else 110.0
+	ForestUI.frame(self, Rect2(x - 8, y - 8, bw + 16, card_h), ForestUI.MINT)
 	var font := ThemeDB.fallback_font
-	var label := "%s  •  Lv.%d  •  %s" % [p.champ_name, p.level, ChampData.ROLES[p.role].display]
-	draw_string(font, Vector2(x, y + 12), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
-
-	_bar(x, y + 20, bw, 14, p.hp, p.max_hp, Color(0.2, 0.8, 0.3), "HP", 10)
-	var mp_col := Color(0.4, 0.67, 1) if p.channeling else Color(0.27, 0.51, 1)
+	draw_string(font, Vector2(x, y + 13), p.champ_name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, ForestUI.PAPER)
+	draw_string(font, Vector2(x + 188, y + 13), "NÍVEL %02d" % p.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ForestUI.GOLD)
+	_bar(x, y + 23, bw, 18, p.hp, p.max_hp, ForestUI.MINT, "VIDA", 11)
+	_bar(x, y + 45, bw, 12, int(p.mana), p.max_mana, Color("7fbad8"), "MANA", 10)
+	_bar(x, y + 61, bw, 10, p.xp, p.exp_to_next(), ForestUI.GOLD, "XP", 9)
+	draw_string(font, Vector2(x, y + 90), "%d OURO" % p.gold, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ForestUI.GOLD)
+	var bank := StageData.essence(main.progress) if main.get("progress") != null else 0
+	draw_string(font, Vector2(x + 130, y + 90), "%d ESSÊNCIA" % bank, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("98cbd4"))
 	if p.channeling:
-		var pulse := sin(Time.get_ticks_msec() * 0.01) * 0.3 + 0.7
-		draw_rect(Rect2(x - 2, y + 36, bw + 4, 18), Color(0.24, 0.47, 1, 0.25))
-		mp_col = Color(0.39, 0.63, pulse)
-	_bar(x, y + 38, bw, 14, int(p.mana), p.max_mana, mp_col, "MP", 10)
-	_bar(x, y + 56, bw, 10, p.xp, p.exp_to_next(), Color(0.78, 0.67, 0.16), "XP", 9)
-
-	draw_string(font, Vector2(x, y + 80), "◉ %d gold" % p.gold,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 0.85, 0.25))
-	var bank := 0
-	if main.get("progress") != null:
-		bank = StageData.essence(main.get("progress"))
-	EssenceIcon.draw_crystal(self, Vector2(x + 136, y + 74), 8.0)
-	draw_string(font, Vector2(x + 148, y + 80), "%d" % bank,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.85, 1))
-
-	if p.channeling:
-		draw_string(font, Vector2(x, y + 106), "✦ CANALIZANDO — você está enraizado! ✦",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.55, 0.78, 1))
+		draw_string(font, Vector2(x, y + 112), "RECUPERANDO MANA • IMÓVEL", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("98cbd4"))
 
 	# Aliados co-op (P2..P4 compactos), ancorados no RODAPÉ do cartão.
 	if main.get("allies") != null:
@@ -125,7 +104,8 @@ func _bar(x: float, y: float, w: float, h: float, cur: int, mx: int,
 		col: Color, caption: String, fsize: int) -> void:
 	draw_rect(Rect2(x, y, w, h), Color(0, 0, 0, 0.85))
 	var ratio := clampf(cur / float(maxi(1, mx)), 0.0, 1.0)
-	draw_rect(Rect2(x, y, w * ratio, h), col)
+	draw_rect(Rect2(x, y, floorf(w * ratio), h), col)
+	draw_rect(Rect2(x, y, floorf(w * ratio), 2), col.lightened(0.3))
 	draw_rect(Rect2(x, y, w, h), Color(1, 1, 1, 0.7), false, 1.0)
 	var font := ThemeDB.fallback_font
 	draw_string(font, Vector2(x + 4, y + h - 3), "%s %d/%d" % [caption, cur, mx],
@@ -168,14 +148,14 @@ func _draw_wave_banner(screen_w: float) -> void:
 	var secs := int(main.game_time)
 	var mm := int(secs / 60.0)
 	var ss := secs % 60
-	var txt := "☠ %d   ⏱ %02d:%02d" % [main.kill_count, mm, ss]
+	var txt := "%d ABATES   /   %02d:%02d" % [main.kill_count, mm, ss]
 	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 	var tw2 := font.get_string_size(wave_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	# A caixa tinha 180 fixo: "Floresta Verde 3/5 • Difícil • 12/15" passa
 	# de 200px e o texto vazava para fora do fundo.
 	var bw2 := maxf(180.0, maxf(tw, tw2) + 26.0)
 	var x := screen_w / 2.0 - bw2 / 2.0
-	ArtUtil.fill_rrect(self, x, 10, bw2, 52, 8, Color(0, 0, 0, 0.62))
+	ForestUI.frame(self, Rect2(x, 10, bw2, 52))
 	draw_string(font, Vector2(screen_w / 2.0 - tw / 2, 28), txt,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 	draw_string(font, Vector2(screen_w / 2.0 - tw2 / 2, 44), wave_txt,
@@ -284,7 +264,7 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 	var sx := mm / world.world_size().x
 	var sy := mm / world.world_size().y
 
-	ArtUtil.fill_rrect(self, mx - 4, my - 4, mm + 8, mm + 8, 8, Color(0, 0, 0, 0.66))
+	ForestUI.frame(self, Rect2(mx - 6, my - 6, mm + 12, mm + 12), ForestUI.MINT)
 	draw_rect(Rect2(mx, my, mm, mm), Color(0.1, 0.25, 0.12))
 
 	if main.minimap_tex != null:
@@ -314,7 +294,7 @@ func _draw_minimap(p: Player, screen_w: float) -> void:
 				var qp: Player = q2
 				draw_circle(_mm_clamp(Vector2(mx + qp.position.x * sx, my + qp.position.y * sy),
 					mx, my, mm), 3.5, Color(0.4, 0.9, 1))
-	ArtUtil.stroke_rrect(self, mx - 4, my - 4, mm + 8, mm + 8, 8, Color(0.5, 0.5, 0.5), 1)
+	draw_rect(Rect2(mx, my, mm, mm), ForestUI.EDGE, false, 2)
 
 func _mm_clamp(p: Vector2, mx: float, my: float, mm: float) -> Vector2:
 	return Vector2(clampf(p.x, mx + 4.0, mx + mm - 4.0), clampf(p.y, my + 4.0, my + mm - 4.0))
@@ -337,8 +317,13 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 	var y := screen_h - box - 34
 	var font := ThemeDB.fallback_font
 
-	ArtUtil.fill_rrect(self, start_x - 10, y - 10,
-		total * (box + gap) - gap + 20, box + 20, 10, Color(0, 0, 0, 0.66))
+	ForestUI.frame(self, Rect2(start_x - 10, y - 10, total * (box + gap) - gap + 20, box + 20))
+	if p.dash_enabled:
+		var dx := start_x + total * (box + gap) + 12
+		ForestUI.frame(self, Rect2(dx, y, 68, box), ForestUI.MINT)
+		_center_str(_key("dash").to_upper(), dx, 68, y + 19, 11, ForestUI.PAPER, font)
+		_center_str("ESQUIVA" if p.dash_cd <= 0.0 else "%.1fs" % p.dash_cd, dx, 68, y + 37, 10, ForestUI.MINT, font)
+		draw_rect(Rect2(dx + 6, y + 43, 56 * (1.0 - clampf(p.dash_cd / 1.6, 0, 1)), 3), ForestUI.MINT)
 
 	# slot ataque básico
 	var ready_a := p.attack_cd <= 0.0 and not p.channeling
@@ -347,9 +332,9 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 	var atk_col := Color(1, 0.86, 0.32) if ready_a else Color(0.47, 0.47, 0.47)
 	_center_str("ATK", start_x, box, y + 12, 10, atk_col, font)
 	SkillIcon.draw_basic(self, p.role, Vector2(start_x + box / 2.0, y + box / 2.0 + 3), 13.0, ready_a)
-	_center_str(_key("attack"), start_x, box, y + box - 5, 10, Color(1, 0.85, 0.2), font)
+	_center_str("AUTO", start_x, box, y + box - 5, 10, Color(1, 0.85, 0.2), font)
 	if p.attack_cd > 0.0:
-		var ratio := clampf(p.attack_cd / Player.ATTACK_CD, 0.0, 1.0)
+		var ratio := clampf(p.attack_cd / (Player.ATTACK_CD / p.attack_speed_mult), 0.0, 1.0)
 		var ch := box * ratio
 		draw_rect(Rect2(start_x, y, box, ch), Color(0, 0, 0, 0.67))
 		draw_rect(Rect2(start_x, y + ch - 1, box, 1), Color(1, 1, 0.4, 0.7))
@@ -385,24 +370,25 @@ func _draw_skill_bar(p: Player, screen_w: float, screen_h: float) -> void:
 		var bx := start_x + (idx + 1) * (box + gap)
 		ArtUtil.fill_rrect(self, bx, y, box, box, 6, Color(0.08, 0.08, 0.1))
 		ArtUtil.stroke_rrect(self, bx, y, box, box, 6, Color(0.3, 0.3, 0.35), 1.0)
-		_center_str("🔒", bx, box, y + 28, 16, Color(0.5, 0.5, 0.55), font)
+		_center_str("—", bx, box, y + 28, 16, Color(0.5, 0.5, 0.55), font)
 		_center_str(str(idx + 1), bx, box, y + box - 5, 10, Color(0.5, 0.5, 0.55), font)
 
 # ---------------------------------------------------------------------
 func _draw_messages(screen_w: float, screen_h: float) -> void:
 	var font := ThemeDB.fallback_font
-	var y := screen_h / 3.0
+	var y := screen_h - 140.0
 	for m in messages:
 		var alpha: float = clampf(m.life / 0.5, 0.0, 1.0)
 		var txt: String = m.base if int(m.count) <= 1 else "%s (%dx)" % [m.base, int(m.count)]
-		var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		draw_string(font, Vector2(screen_w / 2.0 - tw / 2 + 1, y + 1), txt,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0, 0, 0, alpha * 0.7))
-		draw_string(font, Vector2(screen_w / 2.0 - tw / 2, y), txt,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 0.4, alpha))
+		draw_string(font, Vector2(19, y + 1), txt,
+			HORIZONTAL_ALIGNMENT_LEFT, screen_w - 40, 14, Color(0, 0, 0, alpha * 0.7))
+		draw_string(font, Vector2(18, y), txt,
+			HORIZONTAL_ALIGNMENT_LEFT, screen_w - 40, 14, Color(0.8, 0.95, 0.75, alpha))
 		y += 22.0
 
 func _draw_controls(p: Player, screen_h: float) -> void:
+	if main.touch_active():
+		return
 	var font := ThemeDB.fallback_font
 	var txt := ""
 	var col: Color
@@ -410,10 +396,12 @@ func _draw_controls(p: Player, screen_h: float) -> void:
 		txt = "✦ CANALIZANDO — você está PARADO! Pressione %s para sair ✦" % _key("channel")
 		col = Color(0.55, 0.78, 1, 0.85)
 	else:
-		txt = "%s: mover | %s: soco | 1-%d: skills | %s: mana | %s: item | %s: loja | %s: pausa | %s: pular (50%%)" % [
+		txt = "%s: mover | ATK automático (%s) | 1-%d: skills | %s: mana | %s: item | %s: loja | %s: pausa | %s: pular (50%%)" % [
 			_key("move_up").to_upper() + _key("move_left").to_upper() + _key("move_down").to_upper() + _key("move_right").to_upper(),
 			_key("attack"), maxi(1, p.skills.size()), _key("channel"), _key("item"), _key("shop"), _key("pause"), _key("skip")]
 		col = Color(1, 1, 1, 0.5)
+		if p.dash_enabled:
+			txt += " | %s: esquiva" % _key("dash")
 	# Encaixa na largura da tela: sem isso a linha estourava a borda direita
 	# em resoluções estreitas (draw_string não quebra linha sozinho).
 	var fsize := 11

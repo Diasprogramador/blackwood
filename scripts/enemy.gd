@@ -31,13 +31,13 @@ var attack_cd := 0.0
 var hit_flash := 0
 var death_timer := -1.0
 var dead := false
+var reward_claimed := false
 var speed_mult := 1.0
 var is_boss_flag := false
 var is_miniboss_flag := false
 var is_elite := false
 var stage_idx := 0
-# Desencalhe em estágios: 0.5s contorna de lado, 1.5s busca outra rota,
-# 3s teleporta para o ponto livre mais próximo (MoveHelper).
+# Recovery is reserved for invalid spawns; navigation handles obstacles.
 var _stuck_t := 0.0
 var _side := 0.0
 var _side_t := 0.0
@@ -91,6 +91,7 @@ func setup(type_key_p: String, lvl: int, mults: Dictionary = {}) -> void:
 		if not is_boss():
 			type_name = "%s Corrompido" % type_name
 	dead = false
+	reward_claimed = false
 	death_timer = -1.0
 	attack_cd = 0.0
 	hit_flash = 0
@@ -153,20 +154,6 @@ func bolt_color() -> Color:
 		return Color(1, 0.45, 0.1)
 	return Color(0.85, 0.4, 1)
 
-## Procura um ponto livre (não-sólido) para contornar lago/mata fechada.
-## Guarda em _detour e retorna true se achar.
-func _pick_detour() -> bool:
-	if world == null:
-		return false
-	for attempt in 14:
-		var a := randf() * TAU
-		var r := randf_range(140.0, 260.0)
-		var cand := position + Vector2(cos(a), sin(a)) * r
-		if not world.is_solid_at(cand.x, cand.y):
-			_detour = cand
-			return true
-	return false
-
 ## Chamado pela Main a cada frame enquanto joga.
 func ai_update(player: Player, delta: float) -> void:
 	if dead:
@@ -191,7 +178,7 @@ func ai_update(player: Player, delta: float) -> void:
 	var d := to_player.length()
 	# Caçada global: sem limite de distância — se você está vivo, eles vêm.
 	# (Antes paravam a 420px; agora atravessam o mapa atrás de você.)
-	moving = d > 40.0 and player.is_alive()
+	moving = player.is_alive() and (d > 40.0 or (world != null and not world.navigation.clear_segment(position, player.position)))
 
 	if absf(to_player.x) > 1.0:
 		facing = 1 if to_player.x > 0 else -1
@@ -201,84 +188,30 @@ func ai_update(player: Player, delta: float) -> void:
 		var speed := (1.7 + level * 0.07) * 60.0 * speed_mult * spd_mult  # px/s
 		if d > 420.0:
 			speed *= 1.15  # faro: corre para alcançar a presa distante
-		var dir := to_player.normalized()
-		if is_ranged() and not _has_detour and _side == 0.0 and player.is_alive():
-			var prefer := prefer_range()
-			if d < prefer * 0.7:
-				# Perto demais: recua de lado.
-				dir = (-to_player.normalized() * 0.8 + Vector2(-dir.y, dir.x) * _strafe * 0.5).normalized()
-			elif d > prefer * 1.4:
-				pass  # longe: aproxima normal
-			else:
-				# Na medida: metralha de lado, devagar.
-				dir = (Vector2(-dir.y, dir.x) * _strafe).normalized()
-				spd_mult = 0.45
-		speed *= spd_mult
-		if _has_detour:
-			# Outra rota: vai até o ponto livre e só então volta a caçar.
-			var to_way := _detour - position
-			if to_way.length() < 20.0 or _detour_t <= 0.0:
-				_has_detour = false
-				_stuck_t = 0.0
-				_side = 0.0
-			else:
-				dir = to_way.normalized()
-				_detour_t -= delta
-		elif _side != 0.0:
-			# Desencalhe: contorna o obstáculo de lado em vez de tremer parado.
-			var side_v := Vector2(-dir.y, dir.x) * _side
-			dir = (dir * 0.35 + side_v * 0.95).normalized()
-			_side_t -= delta
-			if _side_t <= 0.0:
-				_side = 0.0
-				_stuck_t = 0.0
-		# Velocidade suavizada (acelera/desacelera, sem snap).
-		var want := dir * speed
-		evel = evel.lerp(want, 1.0 - exp(-8.0 * delta))
-		var pos_before := position
-		# Passo com corpo (raio): não entra em vão apertado; quem já está
-		# DENTRO do sólido sempre pode sair — evita paralisia no lago/mata.
-		position = MoveHelper.slide_step(world, position, evel * delta)
-		# Andou de verdade? Deslocamento real (a aproximação ao player
-		# mentia: marcava "preso" com o player fugindo e "solto" tremendo
-		# parado enquanto o player se aproximava).
-		var moved: float = pos_before.distance_to(position)
-		if _has_detour:
-			pass  # desvio em andamento: não conta como preso nem solto
-		elif moved < speed * delta * 0.25:
+		var dir := world.navigation.direction(position, player.position)
+		if is_ranged() and d < prefer_range() * 1.4 and world.navigation.clear_segment(position, player.position):
+			var radial := to_player.normalized()
+			var orbit := radial.orthogonal() * _strafe
+			if d < prefer_range() * 0.7:
+				orbit = (-radial + orbit * 0.5).normalized()
+			if world.navigation.clear_segment(position, position + orbit * 48.0):
+				dir = orbit
+				speed *= 0.6
+		var before := position
+		evel = dir * speed
+		position = MoveHelper.slide_step(world, position, evel * minf(delta, 0.05))
+		if absf(position.x - before.x) > 0.01:
+			facing = 1 if position.x > before.x else -1
+		# Only invalid spawns need recovery; valid enemies follow connected routes.
+		if not MoveHelper.can_enter(world, position):
 			_stuck_t += delta
-			if _stuck_t >= 3.0:
-				# 3s garrado: volta ~3 blocos para trás e tenta outra rota.
-				var back := Vector2.ZERO
-				if evel.length() > 1.0:
-					back = -evel.normalized()
-				else:
-					back = (position - player.position).normalized()
-				var free := MoveHelper.find_free_behind(world, position, back, 3)
-				if free == Vector2.INF:
-					free = MoveHelper.find_free(world, position)
+			if _stuck_t > 0.4:
+				var free := MoveHelper.find_free(world, position)
 				if free != Vector2.INF:
 					position = free
 				_stuck_t = 0.0
-				_side = 0.0
-				_has_detour = false
-			elif _stuck_t >= 1.5 and not _has_detour:
-				# Garrado: abandona e pega outra rota livre.
-				if _pick_detour():
-					_has_detour = true
-					_detour_t = 2.5
-					_side = 0.0
-				else:
-					# Sem ponto livre por perto: tenta de novo em breve.
-					_stuck_t = 1.0
-					_side = -_side if _side != 0.0 else (1.0 if randf() < 0.5 else -1.0)
-					_side_t = 0.9
-			elif _stuck_t > 0.5 and _side == 0.0 and not _has_detour:
-				_side = 1.0 if randf() < 0.5 else -1.0
-				_side_t = 0.9
 		else:
 			_stuck_t = 0.0
-			_side = 0.0
 	elif not moving:
 		evel = evel.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
 		_stuck_t = 0.0
@@ -335,6 +268,8 @@ func try_attack(player: Player) -> bool:
 	if dead or attack_cd > 0.0 or not player.is_alive():
 		return false
 	if position.distance_to(player.position) >= 44.0:
+		return false
+	if world != null and not world.navigation.clear_segment(position, player.position):
 		return false
 	var raw: int
 	if hp < max_hp / 2.0:
@@ -395,6 +330,14 @@ func _draw() -> void:
 		draw_circle(at, 5.0 + k * 9.0, Color(bc, 0.35 + 0.4 * k))
 		draw_arc(at, 12.0 + k * 8.0, 0, TAU, 16, Color(bc, 0.7), 2.0)
 	if not has_sprites:
+		var frames: Array = world.enemy_textures.get("%s:%d" % [type_key, stage_idx], []) if world != null else []
+		if not frames.is_empty():
+			var frame := posmod(int(walk_phase * 4.0 / TAU), 4) if moving else 0
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(float(facing), 1))
+			draw_texture(frames[frame], Vector2(-96, -96), Color(1, 0.45, 0.45) if hit_flash > 0 else Color.WHITE)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			draw_hud(self)
+			return
 		# Fallback procedural (espelha via transform p/ não espelhar o HUD).
 		if facing < 0:
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1, 1))
@@ -409,6 +352,8 @@ func draw_hud(node: CanvasItem) -> void:
 		return
 	var boss := is_boss()
 	var is_mini := is_miniboss()
+	if not boss and not is_mini and not is_elite and hp == max_hp:
+		return
 	var big := boss or is_mini or type_key == "GOLEM"
 	var y := -48.0 if (boss or is_mini) else (-44.0 if big else -30.0)
 	var w := 58.0 if boss else (48.0 if is_mini else (40.0 if is_elite else 28.0))
@@ -430,7 +375,7 @@ func draw_hud(node: CanvasItem) -> void:
 	var border := Color(1, 0.85, 0.3) if boss else (Color(1, 0.4, 0.15) if is_mini else (Color(1, 0.6, 0.2) if is_elite else Color(0, 0, 0, 0.8)))
 	node.draw_rect(Rect2(-w / 2, y, w, 4), border, false, 1.5 if (boss or is_mini) else 1.0)
 
-	if not dead:
+	if not dead and (boss or is_mini or is_elite):
 		var label := ""
 		if boss:
 			label = "★ BOSS Lv.%d %s ★" % [level, type_name]

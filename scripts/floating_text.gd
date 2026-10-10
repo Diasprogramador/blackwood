@@ -9,6 +9,15 @@ var font_size := 12
 var life := 1.0
 var _max_life := 1.0
 var _rise := 40.0
+static var live := 0
+const MAX_LIVE := 48
+var _text_width := 0.0
+
+func _enter_tree() -> void:
+	live += 1
+
+func _exit_tree() -> void:
+	live -= 1
 
 func setup(msg: String, col: Color, pos: Vector2, size: int = 12, duration: float = 1.0) -> void:
 	text = msg
@@ -17,6 +26,7 @@ func setup(msg: String, col: Color, pos: Vector2, size: int = 12, duration: floa
 	font_size = size
 	life = duration
 	_max_life = duration
+	_text_width = ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 
 func _process(delta: float) -> void:
 	life -= delta
@@ -32,7 +42,7 @@ func _draw() -> void:
 		alpha *= 2.0
 	var c := Color(color.r, color.g, color.b, minf(1.0, alpha))
 	# sombra
-	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var tw := _text_width
 	draw_string(font, Vector2(-tw / 2 + 1, 1), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0, 0, 0, c.a * 0.7))
 	draw_string(font, Vector2(-tw / 2, 0), text,

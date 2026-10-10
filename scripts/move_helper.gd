@@ -31,8 +31,12 @@ static func can_enter(world: World, pos: Vector2, r := BODY_R) -> bool:
 static func slide_step(world: World, pos: Vector2, step: Vector2, r := BODY_R) -> Vector2:
 	if world == null or step == Vector2.ZERO:
 		return pos
-	if world.is_solid_at(pos.x, pos.y):
-		return pos + step
+	if step.length() > 8.0:
+		var count := int(ceil(step.length() / 8.0))
+		var point := pos
+		for i in count:
+			point = slide_step(world, point, step / count, r)
+		return point
 	var out := pos
 	if can_enter(world, Vector2(pos.x + step.x, pos.y), r):
 		out.x = pos.x + step.x
@@ -49,6 +53,8 @@ static func slide_step(world: World, pos: Vector2, step: Vector2, r := BODY_R) -
 static func find_free(world: World, pos: Vector2, max_ring := 8) -> Vector2:
 	if world == null:
 		return Vector2.INF
+	if can_enter(world, pos):
+		return pos
 	var tile := float(World.TILE)
 	var cx := int(floor(pos.x / tile))
 	var cy := int(floor(pos.y / tile))

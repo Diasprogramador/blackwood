@@ -54,13 +54,13 @@ const SUPPLIES := [
 ## Quantos inimigos a onda exige (chefão da última onda conta na cota).
 static func wave_quota(_stage: int, wave_idx: int, diff: int) -> int:
 	var dd: Dictionary = DIFFS[clampi(diff, 0, DIFFS.size() - 1)]
-	var base := 3 + wave_idx * 2
+	var base := 14 + wave_idx * 8 + _stage * 10
 	if wave_idx == WAVES_PER_STAGE - 1:
 		base += 2
 	return maxi(3, int(base * float(dd.get("count", 1.0))))
 
 static func alive_cap(stage: int, diff: int) -> int:
-	return 6 + stage * 2 + diff
+	return 12 + stage * 4 + diff * 2
 
 static func global_wave(stage: int, wave_idx: int) -> int:
 	return stage * WAVES_PER_STAGE + wave_idx + 1
