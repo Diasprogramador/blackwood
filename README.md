@@ -61,7 +61,7 @@ assim não são enviadas mudanças de estado que o protocolo atual não replica.
 
 - Chão, árvores e pedras procedurais são rasterizados uma vez e reutilizados.
   Profundidade, escala, colisão e transparência de oclusão continuam por objeto.
-  Uma troca de mapa invalida o chão e reutiliza o atlas dos props.
+  Uma troca de bioma refaz o chão e o atlas dos props com a arte da região.
 - A água desenha apenas a região da câmera. Separação de inimigos consulta uma
   grade espacial, em vez de comparar todos os pares do mapa.
 - Inimigos comuns mostram barras quando feridos; nomes ficam para elites e chefes.
@@ -69,10 +69,23 @@ assim não são enviadas mudanças de estado que o protocolo atual não replica.
 - A pausa congela movimento e recargas. Recompensas por morte são concedidas uma
   única vez, mesmo quando sinal e feedback de ataque chegam ao mesmo handler.
 
+Cada região tem arquitetura, vegetação e habitantes próprios: máscaras de casca
+e árvores antigas na Floresta Verde; obsidiana, fornalhas e armaduras de escória
+na Terra Queimada; salgueiros, cristais de jade e criaturas afogadas no Pântano
+Sombrio. São 18 designs de inimigos (seis por região), com poses em atlas.
+Os detalhes de solo são decorativos e preservam os corredores de navegação.
+
 Verificações de comportamento:
 
 ```sh
 godot --headless --path . --script res://tests/survival_checks.gd
+godot --headless --path . --script res://tests/update_checks.gd
+```
+
+Verificação visual dos três biomas, bestiário e troca de atlas (pasta de saída existente):
+
+```sh
+godot --path . --script res://tests/biome_checks.gd -- exports/biomes
 ```
 
 Verificações gráficas e encontro artificial de estresse com 48 inimigos:
@@ -101,6 +114,13 @@ theme/game_theme.tres
 - `scripts/stage_data.gd` — fases, dificuldades, cotas de onda, essências e desbloqueios.
 - `scripts/champ_data.gd` — campeões, roles e skills.
 - `scripts/game_settings.gd` — volumes, teclas, fullscreen e screen shake (`user://rpg_league_settings.cfg`).
+
+## Atualização 0.6.0 — Três Reinos
+
+Os três mapas têm árvores, pedras, trilhas, água e marcas no solo próprios.
+Cada região também possui seis designs de NPCs, incluindo os chefes, com
+nomes e detalhes de anatomia/equipamento exclusivos. A arte estática fica em
+atlas para manter baixo o custo de desenhar hordas. Consulte o [changelog](CHANGELOG.md).
 
 ## Atualização 0.5.0 — Ecos do Bosque
 

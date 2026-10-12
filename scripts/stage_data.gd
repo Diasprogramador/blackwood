@@ -9,30 +9,30 @@ const WAVES_PER_STAGE := 5
 
 const STAGES := [
 	{
-		name = "Floresta Verde", desc = "Onde tudo começa.\nInimigos fracos.",
+		name = "Floresta Verde", desc = "Raízes antigas e máscaras de casca.\nO bosque guarda seus mortos.",
 		color = Color(0.3, 0.7, 0.3), boss = "GOLEM",
 		palette = {
-			grass = Color(0.16, 0.42, 0.16),
-			dirt = Color(0.48, 0.36, 0.22),
-			water = Color(0.12, 0.35, 0.62),
+			grass = Color("294b39"),
+			dirt = Color("77694b"),
+			water = Color("214b52"),
 		},
 	},
 	{
-		name = "Terra Queimada", desc = "Cinzas e brasas.\nInimigos furiosos.",
+		name = "Terra Queimada", desc = "Obsidiana, cinzas e piras.\nA fornalha ainda respira.",
 		color = Color(0.85, 0.45, 0.2), boss = "DRAGON",
 		palette = {
-			grass = Color(0.36, 0.3, 0.13),
-			dirt = Color(0.32, 0.24, 0.17),
-			water = Color(0.16, 0.3, 0.24),
+			grass = Color("3c3031"),
+			dirt = Color("6a4b3f"),
+			water = Color("6c3028"),
 		},
 	},
 	{
-		name = "Pântano Sombrio", desc = "O coração das trevas.\nSem piedade.",
+		name = "Pântano Sombrio", desc = "Salgueiros e lanternas afogadas.\nSiga a luz por sua conta.",
 		color = Color(0.6, 0.3, 0.8), boss = "BARON",
 		palette = {
-			grass = Color(0.1, 0.3, 0.24),
-			dirt = Color(0.26, 0.18, 0.26),
-			water = Color(0.26, 0.16, 0.46),
+			grass = Color("29313f"),
+			dirt = Color("555365"),
+			water = Color("202d43"),
 		},
 	},
 ]

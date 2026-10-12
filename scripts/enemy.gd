@@ -81,15 +81,7 @@ func setup(type_key_p: String, lvl: int, mults: Dictionary = {}) -> void:
 	is_miniboss_flag = bool(mults.get("miniboss", false))
 	is_elite = bool(mults.get("elite", false))
 	base_color = td.color
-	# Fauna da fase: cor e nome mudam com o tema (chefões mantêm o nome).
-	if stage_idx == 1:
-		base_color = (td.color as Color).lerp(Color(1, 0.55, 0.25), 0.3)
-		if not is_boss():
-			type_name = "%s Chamuscado" % type_name
-	elif stage_idx == 2:
-		base_color = (td.color as Color).lerp(Color(0.7, 0.4, 1), 0.3)
-		if not is_boss():
-			type_name = "%s Corrompido" % type_name
+	type_name = BiomeEnemyArt.title(type_key, stage_idx)
 	dead = false
 	reward_claimed = false
 	death_timer = -1.0
@@ -322,6 +314,11 @@ func client_tick(delta: float) -> void:
 func _draw() -> void:
 	# Sombra no chão (o corpo é o Sprite2D `body`).
 	ArtUtil.fill_ellipse(self, 0, 8, sh_w, sh_w * 0.32, Color(0, 0, 0, 0.32))
+	if is_elite and not dead:
+		var accent: Color = BiomeArt.palette(stage_idx)[4]
+		draw_arc(Vector2(0,8),22,0,TAU,6,Color(accent,0.6),2)
+		for side in [-1,1]:
+			draw_line(Vector2(side*21,-18),Vector2(side*25,-25),accent,2)
 	# Telegraph do tiro: brilho crescendo na direção do player.
 	if charge_t > 0.0 and not dead:
 		var k := 1.0 - charge_t / 0.5
@@ -341,10 +338,10 @@ func _draw() -> void:
 		# Fallback procedural (espelha via transform p/ não espelhar o HUD).
 		if facing < 0:
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1, 1))
-			EnemyArt.draw_enemy(self, type_key, base_color, hit_flash > 0, walk_phase, moving)
+			BiomeEnemyArt.draw_enemy(self, type_key, stage_idx, walk_phase)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
-			EnemyArt.draw_enemy(self, type_key, base_color, hit_flash > 0, walk_phase, moving)
+			BiomeEnemyArt.draw_enemy(self, type_key, stage_idx, walk_phase)
 	draw_hud(self)
 
 func draw_hud(node: CanvasItem) -> void:
@@ -355,7 +352,7 @@ func draw_hud(node: CanvasItem) -> void:
 	if not boss and not is_mini and not is_elite and hp == max_hp:
 		return
 	var big := boss or is_mini or type_key == "GOLEM"
-	var y := -48.0 if (boss or is_mini) else (-44.0 if big else -30.0)
+	var y := -96.0 if (boss or is_mini) else (-88.0 if big else -64.0)
 	var w := 58.0 if boss else (48.0 if is_mini else (40.0 if is_elite else 28.0))
 	node.draw_rect(Rect2(-w / 2 - 1, y - 1, w + 2, 6), Color(0, 0, 0, 0.65))
 	node.draw_rect(Rect2(-w / 2, y, w, 4), Color(0.25, 0.1, 0.1))

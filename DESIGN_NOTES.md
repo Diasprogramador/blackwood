@@ -9,3 +9,15 @@ Menu assimétrico: ações à esquerda, personagens à direita, perfil no rodap�
 Ícones vetoriais próprios com traço angular, compartilhados entre menus e touch.
 HUD: molduras rebitadas; controles touch arrastáveis com edição individual.
 Preservar as sprites originais. Não voltar aos emojis como ícones de navegação.
+
+
+## Biomas — direção de cenário e bestiário
+Floresta: musgo #294b39, terra #77694b, água #214b52; raízes, máscaras de
+casca, corças de galhos e monólitos cobertos de musgo.
+Terra Queimada: cinza #3c3031, basalto #6a4b3f, poças de escória #6c3028;
+árvores partidas, obsidiana, fornalhas e armaduras com fendas incandescentes.
+Pântano: turfa #29313f, calçada #555365, água #202d43; salgueiros, cristais,
+ossos e lanternas. Silhuetas pendentes, cascos e barbatanas.
+Seis tipos de NPC × três regiões, quatro poses de movimento por desenho.
+Colisão e geração de rotas permanecem as mesmas; os símbolos centrais são
+incrustações planas. O atlas de árvores/pedras deve ser refeito na troca de bioma.

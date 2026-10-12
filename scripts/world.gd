@@ -34,6 +34,7 @@ var water_fx: Node2D
 var props: Node2D
 var stage_palette: Dictionary = {}
 var _generation := 0
+var _prop_stage := -1
 var _prop_textures: Array[AtlasTexture] = []
 var enemy_textures: Dictionary = {}
 
@@ -96,6 +97,7 @@ func generate(seed_value: int = -1) -> void:
 			var wy := y * TILE + TILE / 2.0 + 8.0
 			if t == T_TREE:
 				var tree := TreeProp.new()
+				tree.stage_idx = stage_idx
 				tree.variant = _rng.randi_range(0, 11)
 				tree.position = Vector2(wx, wy)
 				tree.z_index = depth_z(wy)
@@ -103,6 +105,7 @@ func generate(seed_value: int = -1) -> void:
 				_prop_grid[Vector2i(x, y)] = tree
 			elif t == T_ROCK:
 				var rock := RockProp.new()
+				rock.stage_idx = stage_idx
 				rock.variant = _rng.randi_range(0, 5)
 				rock.position = Vector2(wx, wy)
 				rock.z_index = depth_z(wy)
@@ -153,10 +156,11 @@ func _bake_scenery(generation: int) -> void:
 	viewport.queue_free()
 	if generation != _generation:
 		return
-	if _prop_textures.is_empty():
+	if _prop_textures.is_empty() or _prop_stage != stage_idx:
 		var atlas_view := _bake_viewport(Vector2i(12 * 96, 2 * 96))
 		for i in 18:
 			var prop: Node2D = TreeProp.new() if i < 12 else RockProp.new()
+			prop.stage_idx = stage_idx
 			prop.variant = i if i < 12 else i - 12
 			prop.position = Vector2((i % 12) * 96 + 48, (i / 12) * 96 + 80)
 			atlas_view.add_child(prop)
@@ -168,6 +172,7 @@ func _bake_scenery(generation: int) -> void:
 			atlas_view.queue_free()
 			return
 		var atlas := ImageTexture.create_from_image(atlas_view.get_texture().get_image())
+		_prop_stage = stage_idx
 		_prop_textures.clear()
 		for i in 18:
 			var texture := AtlasTexture.new()
@@ -197,12 +202,8 @@ func _bake_enemy_art(generation: int) -> void:
 			for pose in 4:
 				var index := (stage * 6 + kind) * 4 + pose
 				var frame := EnemyArtFrame.new()
+				frame.stage_idx = stage
 				frame.type_key = EnemyData.ORDER[kind]
-				frame.color = EnemyData.TYPES[frame.type_key].color
-				if stage == 1:
-					frame.color = frame.color.lerp(Color(1, 0.55, 0.25), 0.3)
-				elif stage == 2:
-					frame.color = frame.color.lerp(Color(0.7, 0.4, 1), 0.3)
 				frame.phase = pose * TAU / 4.0
 				frame.position = Vector2((index % 8) * 192 + 96, (index / 8) * 192 + 96)
 				viewport.add_child(frame)

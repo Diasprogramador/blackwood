@@ -1,3 +1,36 @@
+# Blackwood 0.6.0 — Três Reinos
+
+- Floresta Verde com árvores de copas sobrepostas, pedras rúnicas, musgo e samambaias.
+- Terra Queimada com troncos carbonizados, obsidiana, trilhas de lajes e brasas.
+- Pântano Sombrio com salgueiros, cristais de jade, passagens antigas e água espectral.
+- 18 designs de NPCs, seis por região: máscaras, armaduras, galhadas, asas,
+  lanternas e carapaças próprios. Chefes também mudam de aparência e nome.
+- Silhuetas com sombreado, textura e poses de movimento em atlas; destaque para elites.
+- Símbolos regionais na praça central e paletas próprias de terreno e água.
+- O atlas de árvores e pedras acompanha a troca de região, inclusive ao voltar
+  para um mapa anterior. Os adornos do chão preservam a navegação existente.
+
+## Instalação
+
+Windows: extraia `blackwood-windows.zip` e execute `blackwood.exe`, mantendo
+`blackwood.pck` ao lado. Android ARM64: instale `blackwood.apk` sobre a versão
+anterior. Identificador e certificado mantidos; código de versão incrementado
+para 5. Todos os participantes do co-op devem usar a versão 0.6.0.
+
+## Validação
+
+- 35 verificações de sobrevivência e 20 de navegação/HUD aprovadas.
+- Teste gráfico de quatro transições (floresta → queimada → pântano → floresta),
+  com comparação dos atlas e conferência visual dos 18 NPCs.
+- Encontro com 48 inimigos: 11,69 ms médios e 21,12 ms p95 neste computador.
+  O resultado não garante o mesmo desempenho em outros aparelhos.
+- Executável Windows exportado iniciado sem erros.
+- APK ARM64 verificado com assinatura v2/v3, versão 0.6.0/código 5 e o
+  mesmo certificado das versões anteriores.
+- Instalação em Android físico e co-op entre aparelhos não testados nesta rodada.
+
+---
+
 # Blackwood 0.5.0 — Ecos do Bosque
 
 - Novo menu com os personagens originais do Canva, paleta do bosque e ícones próprios.

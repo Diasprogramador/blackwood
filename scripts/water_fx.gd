@@ -24,6 +24,8 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if world == null:
 		return
+	var p := BiomeArt.palette(world.stage_idx)
+	var surface: Color = p[4] if world.stage_idx == 1 else p[3]
 	var TILE := World.TILE
 	var visible_rect := (get_canvas_transform().affine_inverse() * get_viewport_rect()).grow(TILE)
 	for tile in world._water_tiles:
@@ -34,9 +36,14 @@ func _draw() -> void:
 		var phase := _t * 2.0 + tile.x * 0.7 + tile.y * 0.45
 		# ondulação
 		var ox := sin(phase) * 5.0
-		draw_rect(Rect2(px + 6 + ox, py + 10, 9, 2), Color(0.4, 0.65, 0.9, 0.5))
+		draw_rect(Rect2(px + 6 + ox, py + 10, 9, 2), Color(surface,0.4))
 		var ox2 := sin(phase + 1.6) * 4.0
-		draw_rect(Rect2(px + 16 - ox2, py + 20, 7, 2), Color(0.35, 0.6, 0.85, 0.4))
+		draw_rect(Rect2(px + 16 - ox2, py + 20, 7, 2), Color(surface,0.25))
+		if world.stage_idx == 1:
+			var rise := fmod(_t * 8 + tile.x * 7 + tile.y * 3, 22.0)
+			draw_rect(Rect2(px+15,py+20-rise,2,3),Color(p[4],0.55*(1-rise/22)))
+		elif world.stage_idx == 2 and (tile.x + tile.y) % 3 == 0:
+			draw_arc(Vector2(px+15,py+17),4+sin(phase)*2,0,TAU,8,Color(p[4],0.2),1)
 		# brilho
 		var spark := sin(phase * 1.7)
 		if spark > 0.7:
@@ -52,16 +59,16 @@ func _draw() -> void:
 			var wob := 3.0 + sin(phase * 2.0 + tile.x) * 1.5
 			if d.x == 1:
 				_foam(px + TILE - 2, py, 2, TILE, -1.0, 0.0)
-				ArtUtil.fill_ellipse(self, px + TILE - 2, fy, 2, wob, Color(0.9, 0.96, 1, 0.4))
+				ArtUtil.fill_ellipse(self, px + TILE - 2, fy, 2, wob, Color(surface,0.3))
 			elif d.x == -1:
 				_foam(px, py, 2, TILE, 1.0, 0.0)
-				ArtUtil.fill_ellipse(self, px + 2, fy, 2, wob, Color(0.9, 0.96, 1, 0.4))
+				ArtUtil.fill_ellipse(self, px + 2, fy, 2, wob, Color(surface,0.3))
 			elif d.y == 1:
 				_foam(px, py + TILE - 2, TILE, 2, 0.0, -1.0)
-				ArtUtil.fill_ellipse(self, fx, py + TILE - 2, wob, 2, Color(0.9, 0.96, 1, 0.4))
+				ArtUtil.fill_ellipse(self, fx, py + TILE - 2, wob, 2, Color(surface,0.3))
 			else:
 				_foam(px, py, TILE, 2, 0.0, 1.0)
-				ArtUtil.fill_ellipse(self, fx, py + 2, wob, 2, Color(0.9, 0.96, 1, 0.4))
+				ArtUtil.fill_ellipse(self, fx, py + 2, wob, 2, Color(surface,0.3))
 
 ## Espuma numa aresta da margem: 3 faixas com alfa caindo para dentro da
 ## água. A versão anterior era um corte chapado de 3px — mostrava o degrau.
@@ -69,4 +76,4 @@ func _foam(x: float, y: float, w: float, h: float, sx: float, sy: float) -> void
 	for i in 3:
 		var a: float = [0.40, 0.21, 0.09][i]
 		var t := float(i) * 2.6
-		draw_rect(Rect2(x + sx * t, y + sy * t, w, h), Color(0.82, 0.93, 1, a))
+		draw_rect(Rect2(x + sx * t, y + sy * t, w, h), Color(BiomeArt.palette(world.stage_idx)[3], a * 0.7))
