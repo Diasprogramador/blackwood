@@ -1,3 +1,38 @@
+# Blackwood 0.7.0 — Fronteira de Ferro
+
+- Seleção de mapas com miniaturas dos biomas, seus chefes e indicação de bloqueio.
+- Dificuldades com selos de ameaça e multiplicadores reais de vida, dano, horda e ouro.
+- HUD com retrato, placas recortadas, transição de vida perdida, progresso das
+  cinco ondas e recargas circulares. Ações clicáveis no desktop e descrições
+  das habilidades ao passar o mouse; os controles mobile personalizados continuam.
+- Ataques com lâminas em camadas, rastros de energia, fragmentos e impactos
+  específicos por personagem. Detalhes reduzidos na qualidade baixa.
+- Removidas as escolhas de melhorias gratuitas ao subir de nível. A luta continua
+  sem pausa, a vida máxima cresce linearmente e o nível recupera apenas a vida
+  e mana acrescentadas. Lojas e desbloqueios permanentes foram preservados.
+- Cliques de combate do HUD no cliente co-op seguem o envio de comandos ao host.
+
+## Instalação
+
+Windows: extraia `blackwood-windows.zip` e execute `blackwood.exe`, mantendo
+`blackwood.pck` ao lado. Android ARM64: instale `blackwood.apk` sobre a versão
+anterior. Identificador e certificado mantidos; código de versão 6.
+Todos os participantes do co-op devem usar a versão 0.7.0.
+
+## Validação
+
+- 28 verificações de combate/progressão e 20 de navegação/HUD aprovadas.
+- Seleção bloqueada/desbloqueada, clique em mapa/dificuldade, pausa, loja,
+  canalização e envio único de comando co-op testados.
+- Capturas em desktop e 960 × 540; 180 amostras de efeitos em duas qualidades.
+- Executável Windows exportado iniciado sem erros; APK ARM64 com assinatura
+  v2/v3 verificada e certificado igual ao das versões anteriores.
+- Encontro artificial com 48 inimigos: 14,95 ms médios e 28,62 ms p95 neste
+  computador, com atributos ofensivos normais. Não garante desempenho em outros aparelhos.
+- Instalação em Android físico e sessão co-op entre aparelhos não testadas nesta rodada.
+
+---
+
 # Blackwood 0.6.0 — Três Reinos
 
 - Floresta Verde com árvores de copas sobrepostas, pedras rúnicas, musgo e samambaias.

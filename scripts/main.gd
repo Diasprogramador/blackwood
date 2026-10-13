@@ -4,7 +4,7 @@ extends Node2D
 ## spawn, câmera, drop de gold e integração das UIs.
 ## Port de Main.java (modo gráfico) + GamePanel.java (loop, spawn, input, overlays).
 
-enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE, UPGRADE }
+enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE }
 
 const WorldScript := preload("res://scripts/world.gd")
 const PlayerScript := preload("res://scripts/player.gd")
@@ -55,6 +55,7 @@ var msg_seq := 0
 var msg_last := ""
 var msg_seen := 0
 var mp_prev := {}
+var _hud_edges := {}
 var net_id_counter := 0
 var touch_ui: TouchControls = null
 var profiles_ui: ProfilesMenu = null
@@ -76,9 +77,6 @@ var settings_ui: SettingsMenu
 var pause_layer: Control
 var gameover_layer: Control
 var victory_layer: Control
-var upgrade_menu: RunUpgradeMenu
-var _pending_upgrades := 0
-var _current_offers: Array = []
 var settings: Dictionary = GameSettings.default_data()
 var _shop_return: State = State.MENU
 
@@ -251,9 +249,6 @@ func _ready() -> void:
 	_build_pause_ui(ui_root)
 	_build_gameover_ui(ui_root)
 	_build_victory_ui(ui_root)
-	upgrade_menu = RunUpgradeMenu.new()
-	upgrade_menu.chosen.connect(_choose_run_upgrade)
-	ui_root.add_child(upgrade_menu)
 
 	_enter_menu()
 
@@ -494,8 +489,6 @@ func _build_victory_ui(parent: Node) -> void:
 func _hide_all() -> void:
 	if touch_ui != null:
 		touch_ui.hide()
-	if upgrade_menu != null:
-		upgrade_menu.hide()
 	hud.visible = false
 	shop.visible = false
 	pause_layer.visible = false
@@ -829,9 +822,6 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 			say(msg)
 			_float_text(msg, player.position + Vector2(0, -40), Color(1, 0.9, 0.4), 13)
 			Sfx.play(self, "levelup")
-			if mp == 0:
-				_pending_upgrades += 1
-				_open_run_upgrade.call_deferred()
 	)
 	entities.add_child(player)
 	_update_camera_limits()
@@ -867,36 +857,7 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	else:
 		say("Bem-vindo, %s! %s • %s (%d/5 skills)" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff), nskills])
 		say("%s = soco | 1-%d = skills | %s = loja" % [atk_key, nskills, shop_key])
-	say("Ataque básico automático • suba de nível e escolha melhorias!")
-
-func _open_run_upgrade() -> void:
-	if mp != 0 or state != State.PLAY or _pending_upgrades <= 0 or player == null or not player.is_alive():
-		return
-	_current_offers = RunUpgrades.offer(player)
-	if _current_offers.is_empty():
-		_pending_upgrades = 0
-		return
-	state = State.UPGRADE
-	get_tree().paused = true
-	upgrade_menu.open(_current_offers, player.level)
-	_update_touch()
-
-func _choose_run_upgrade(id: String) -> void:
-	if state != State.UPGRADE:
-		return
-	var offered := false
-	for option in _current_offers:
-		if option.id == id:
-			offered = true
-	if not offered or not RunUpgrades.apply(player, id):
-		upgrade_menu.open(_current_offers, player.level)
-		return
-	_pending_upgrades -= 1
-	_current_offers.clear()
-	get_tree().paused = false
-	state = State.PLAY
-	Sfx.play(self, "buy", -6.0)
-	_open_run_upgrade.call_deferred()
+	say("Ataque automático • use esquiva, habilidades e o terreno para sobreviver.")
 
 ## Spawna um aliado P2..P4 (host simula, client só renderiza).
 func _spawn_ally(champ_idx: int, slot: int) -> void:
@@ -988,11 +949,8 @@ func _diff_mults() -> Dictionary:
 	return m
 
 func _clear_world() -> void:
+	_hud_edges.clear()
 	get_tree().paused = false
-	_pending_upgrades = 0
-	_current_offers.clear()
-	if upgrade_menu != null:
-		upgrade_menu.hide()
 	for e in enemies:
 		if is_instance_valid(e):
 			e.queue_free()
@@ -1589,6 +1547,14 @@ func _update_touch() -> void:
 		if pl != null and is_instance_valid(pl):
 			(pl as Player).touch_move = td
 
+## Mouse HUD clicks use the same network edge stream as keyboard/touch.
+func hud_action(id: String) -> void:
+	if state != State.PLAY or shop.visible: return
+	if mp == 2 and (id in ["attack","channel","item","skip"] or id.begins_with("skill")):
+		_hud_edges[id] = true
+	else:
+		touch_button(id)
+
 func touch_button(id: String) -> void:
 	if state == State.SHOP:
 		if id == "shop" or id == "pause":
@@ -1635,7 +1601,9 @@ func _edge(action_id: String) -> bool:
 		now = true
 	var was := bool(mp_prev.get(action_id, false))
 	mp_prev[action_id] = now
-	return now and not was
+	var clicked := bool(_hud_edges.get(action_id,false))
+	_hud_edges.erase(action_id)
+	return clicked or (now and not was)
 
 func mp_apply_players(list: Array) -> void:
 	# Cada entrada leva a chave do dono (1 = host). O próprio vai para

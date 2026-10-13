@@ -21,3 +21,15 @@ ossos e lanternas. Silhuetas pendentes, cascos e barbatanas.
 Seis tipos de NPC × três regiões, quatro poses de movimento por desenho.
 Colisão e geração de rotas permanecem as mesmas; os símbolos centrais são
 incrustações planas. O atlas de árvores/pedras deve ser refeito na troca de bioma.
+
+## Fronteira de Ferro — seleção e combate
+Seleção como expedição: três miniaturas com a arte real dos biomas; dificuldade
+com um selo de lâminas (quantidade = grau de ameaça) e multiplicadores reais.
+Manter tinta #101d25, pergaminho #f4e7c6, âmbar #e9b968 e espírito #87d6aa.
+Título 34 px, nomes 18–20 px, dados 14 px, fonte embarcada do Godot.
+HUD com placas de cantos cortados, retrato original, barras compactas e cinco
+marcas de onda. Recarga circular, tooltip e foco acompanham ações clicáveis.
+No touch, preservar os controles personalizados e deslocar avisos do joystick.
+Ataques: antecipação curta, fio luminoso, impacto e fragmentos; custo limitado
+pela qualidade. Retirar escolhas de melhorias, cura percentual e crescimento
+composto da vida. Lojas e desbloqueios já conquistados permanecem.

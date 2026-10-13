@@ -1,8 +1,6 @@
 class_name StageMenu
 extends Control
 
-## Passo 2 do Jogar: escolher fase + dificuldade (tela própria, sem mistura).
-
 signal back_pressed
 signal shop_pressed
 signal start_pressed(stage: int, diff: int)
@@ -10,382 +8,235 @@ signal start_pressed(stage: int, diff: int)
 var progress: Dictionary = StageData.default_progress()
 var selected_stage := 0
 var selected_diff := 0
+var step := 0
 var _tick := 0.0
 var _stage_btns: Array[Button] = []
 var _diff_btns: Array[Button] = []
-var _essence_label: Label = null
-var _info_label: Label = null
-var _preview: StagePreview = null
-var step := 0  # 0 = fase, 1 = dificuldade
+var _info_label: Label
 
-func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_PASS
+class ExpeditionCard extends Button:
+	var index := 0
+	var difficulty := false
+	var chosen := false
+	var locked := false
+	var cleared := false
+
+	func _ready() -> void:
+		text = ""
+		for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+			add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		focus_entered.connect(queue_redraw)
+		focus_exited.connect(queue_redraw)
+
+	func caption(value: String, y: float, px: int, col: Color) -> void:
+		var font := ThemeDB.fallback_font
+		var width := font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+		draw_string(font, Vector2((size.x-width)/2,y),value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,col)
+
+	func _draw() -> void:
+		var accent: Color = StageData.DIFFS[index].color if difficulty else BiomeArt.palette(index)[4]
+		var active := chosen or (is_hovered() and not locked) or has_focus()
+		ForestUI.frame(self, Rect2(Vector2.ZERO,size),accent if active else ForestUI.EDGE)
+		if active:
+			draw_rect(Rect2(5,5,size.x-10,size.y-10), Color(accent,0.08))
+		if difficulty:
+			_draw_difficulty(accent)
+		else:
+			_draw_region(accent)
+		if locked:
+			caption("BLOQUEADO",size.y-18,12,ForestUI.PAPER)
+			caption("Conclua " + (StageData.diff_name(maxi(0,index-1)) if difficulty else "o reino %d" % index),size.y-40,11,ForestUI.PAPER)
+		elif chosen:
+			var w := size.x-32
+			draw_rect(Rect2(16,size.y-38,w,25),accent)
+			caption("SELECIONADO",size.y-20,12,ForestUI.INK)
+		else:
+			caption("CONCLUÍDO" if cleared else "SELECIONAR",size.y-20,12,ForestUI.PAPER)
+
+	func _draw_region(accent: Color) -> void:
+		var art_h := size.y-137
+		var pal: Dictionary = StageData.STAGES[index].palette
+		draw_rect(Rect2(8,8,size.x-16,art_h),pal.grass.darkened(0.2))
+		# A composed miniature of the actual region, using its own art vocabulary.
+		for i in 9:
+			var x := 15.0 + fmod(i*67.0,size.x-35)
+			var y := 24.0 + fmod(i*37.0,maxf(30,art_h-40))
+			draw_line(Vector2(x,y),Vector2(x+15,y+3),Color(accent,0.12),2)
+		ArtUtil.fill_ellipse(self,size.x*0.5,art_h*0.82,size.x*0.38,22,pal.dirt)
+		for i in 4:
+			var x: float = size.x * [0.17,0.81,0.28,0.88][i]
+			var y: float = art_h * [0.55,0.56,0.88,0.9][i]
+			draw_set_transform(Vector2(x,y),0,Vector2.ONE*0.85)
+			BiomeArt.tree(self,index,i)
+		draw_set_transform(Vector2(size.x*0.53,art_h*0.88),0,Vector2.ONE*minf(1.25,art_h/95))
+		BiomeEnemyArt.draw_enemy(self,StageData.boss_type(index),index,0)
+		draw_set_transform(Vector2.ZERO)
+		if locked:
+			draw_rect(Rect2(8,8,size.x-16,art_h),Color(ForestUI.INK,0.42))
+		caption("REINO %02d / 05 ONDAS" % (index+1),size.y-113,11,accent)
+		caption(StageData.stage_name(index).to_upper(),size.y-85,18,ForestUI.PAPER)
+		caption(BiomeEnemyArt.title(StageData.boss_type(index),index),size.y-62,12,ForestUI.MINT)
+
+	func _draw_difficulty(accent: Color) -> void:
+		var center := Vector2(size.x/2,67)
+		# A threat seal: each additional blade corresponds to a difficulty tier.
+		draw_arc(center,35,0,TAU,6,Color(accent,0.25),9)
+		for i in index+1:
+			var x := (i-index*0.5)*15
+			var points := PackedVector2Array([center+Vector2(x, -27),center+Vector2(x+4,-17),center+Vector2(x+3,17),center+Vector2(x-3,17),center+Vector2(x-4,-17)])
+			draw_colored_polygon(points,accent)
+			draw_line(center+Vector2(x-7,18),center+Vector2(x+7,18),ForestUI.PAPER,2)
+			draw_line(center+Vector2(x,18),center+Vector2(x,28),accent,3)
+		var d: Dictionary = StageData.DIFFS[index]
+		caption(d.name,126,20,accent)
+		caption(["Aprenda a sobreviver", "Cada erro pesa", "Sem espaço para hesitar", "O bosque não perdoa"][index],149,11,ForestUI.PAPER)
+		var top := 175.0
+		for line in ["VIDA INIMIGA   ×%.2f" % d.hp,"DANO INIMIGO   ×%.2f" % d.atk,"HORDA   ×%.2f" % d.count,"OURO   ×%.2f" % d.gold]:
+			caption(line,top,14,ForestUI.PAPER)
+			top += 23
 
 func build(prog: Dictionary, stage: int, diff: int) -> void:
 	progress = prog
-	selected_stage = stage
-	selected_diff = diff
-	if not StageData.is_stage_unlocked(progress, selected_stage):
-		selected_stage = 0
-	if not StageData.is_diff_unlocked(progress, selected_stage, selected_diff):
-		selected_diff = 0
-	for c in get_children():
-		remove_child(c)
-		c.queue_free()
-	_stage_btns.clear()
-	_diff_btns.clear()
-	_essence_label = null
-	_info_label = null
-	_preview = null
+	selected_stage = stage if StageData.is_stage_unlocked(prog,stage) else 0
+	selected_diff = diff if StageData.is_diff_unlocked(prog,selected_stage,diff) else 0
 	step = 0
-	build_chrome_only()
-
-## Limpa a tela e remonta a etapa atual.
-## SEM este passo (voltar e ESC chamavam build_chrome_only direto) um segundo
-## MarginContainer nascia em cima do primeiro e a UI ficava duplicada.
-func _rebuild() -> void:
-	for c in get_children():
-		remove_child(c)
-		c.queue_free()
-	_stage_btns.clear()
-	_diff_btns.clear()
-	_essence_label = null
-	_info_label = null
-	_preview = null
-	build_chrome_only()
-
-func _to_step_1() -> void:
-	if not StageData.is_stage_unlocked(progress, selected_stage):
-		Sfx.play(self, "error")
-		return
-	Sfx.play(self, "click")
-	step = 1
 	_rebuild()
 
-func build_chrome_only() -> void:
-	# (re)monta base + conteúdo da etapa atual (usado ao trocar de etapa)
+func _label(value: String, px: int, col: Color) -> Label:
+	var label := Label.new()
+	label.text = value
+	label.add_theme_font_size_override("font_size",px)
+	label.add_theme_color_override("font_color",col)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return label
+
+func _button(value: String, callback: Callable, col: Color = ForestUI.GOLD) -> Button:
+	var button := Button.new()
+	button.text = value
+	button.custom_minimum_size = Vector2(180,48)
+	ForestUI.button(button,col)
+	button.pressed.connect(callback)
+	return button
+
+func _rebuild() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	_stage_btns.clear()
+	_diff_btns.clear()
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 60)
-	margin.add_theme_constant_override("margin_right", 60)
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left","right","top","bottom"]:
+		margin.add_theme_constant_override("margin_"+side,24)
 	add_child(margin)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation",10)
+	margin.add_child(layout)
+	layout.add_child(_label("BLACKWOOD   /   EXPEDIÇÃO   /   %s" % ("01 • DESTINO" if step == 0 else "02 • DESAFIO"),12,ForestUI.MINT))
+	layout.add_child(_label("ATRAVESSE A FRONTEIRA" if step == 0 else "ESCOLHA SEU DESAFIO",34,ForestUI.PAPER))
+	_info_label = _label("",13,ForestUI.GOLD)
+	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(_info_label)
+	var cards := HBoxContainer.new()
+	cards.add_theme_constant_override("separation",14)
+	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(cards)
+	for i in (3 if step == 0 else 4):
+		var card := ExpeditionCard.new()
+		card.index = i
+		card.difficulty = step == 1
+		card.custom_minimum_size = Vector2(170,300)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.pressed.connect(_select.bind(i))
+		cards.add_child(card)
+		if step == 0: _stage_btns.append(card)
+		else: _diff_btns.append(card)
+	var nav := HBoxContainer.new()
+	nav.add_theme_constant_override("separation",14)
+	layout.add_child(nav)
+	nav.add_child(_button("VOLTAR" if step == 0 else "TROCAR MAPA",_back,ForestUI.EDGE))
+	var help := _label("Setas: escolher  •  Enter: confirmar",12,ForestUI.PAPER)
+	help.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nav.add_child(help)
+	nav.add_child(_button("DEFINIR DESAFIO" if step == 0 else "INICIAR EXPEDIÇÃO",_confirm))
+	_refresh()
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(vbox)
-
-	var title := MenuArt.title_label_gold("ESCOLHA A FASE", 40)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(title)
-	vbox.add_child(MenuArt.divider())
-
-	var ess_row := HBoxContainer.new()
-	ess_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	ess_row.add_theme_constant_override("separation", 6)
-	ess_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(ess_row)
-	var ess_icon := EssenceIcon.new()
-	ess_icon.custom_minimum_size = Vector2(20, 20)
-	ess_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ess_row.add_child(ess_icon)
-	_essence_label = Label.new()
-	_essence_label.add_theme_font_size_override("font_size", 15)
-	_essence_label.add_theme_color_override("font_color", Color(0.55, 0.85, 1))
-	_essence_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ess_row.add_child(_essence_label)
-
+func _select(index: int) -> void:
 	if step == 0:
-		_build_step_0(vbox)
+		if not StageData.is_stage_unlocked(progress,index): return
+		selected_stage = index
+		if not StageData.is_diff_unlocked(progress,index,selected_diff): selected_diff = 0
 	else:
-		_build_step_1(vbox)
+		if not StageData.is_diff_unlocked(progress,selected_stage,index): return
+		selected_diff = index
+	Sfx.play(self,"click")
 	_refresh()
-
-func _build_step_0(vbox: VBoxContainer) -> void:
-	var st_title := _section("— FASE (passe para liberar a próxima) —")
-	vbox.add_child(st_title)
-	var stage_row := HBoxContainer.new()
-	stage_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	stage_row.add_theme_constant_override("separation", 12)
-	stage_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(stage_row)
-	for s in StageData.STAGES.size():
-		stage_row.add_child(_make_stage_btn(s))
-
-	_preview = StagePreview.new()
-	_preview.custom_minimum_size = Vector2(420, 150)
-	_preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_preview)
-
-	var nav := HBoxContainer.new()
-	nav.alignment = BoxContainer.ALIGNMENT_CENTER
-	nav.add_theme_constant_override("separation", 16)
-	nav.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(nav)
-
-	var back := Button.new()
-	back.text = "← Voltar"
-	back.custom_minimum_size = Vector2(200, 50)
-	MenuArt.apply_menu_btn(back, MenuArt.GOLD)
-	back.pressed.connect(func():
-		Sfx.play(self, "click")
-		back_pressed.emit()
-	)
-	nav.add_child(back)
-
-	var next := Button.new()
-	next.text = "PRÓXIMO →"
-	next.custom_minimum_size = Vector2(240, 50)
-	MenuArt.apply_menu_btn(next, Color(0.4, 0.9, 0.45))
-	next.pressed.connect(func(): _to_step_1())
-	nav.add_child(next)
-
-func _build_step_1(vbox: VBoxContainer) -> void:
-	vbox.add_child(_section("— DIFICULDADE —"))
-	var diff_row := HBoxContainer.new()
-	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	diff_row.add_theme_constant_override("separation", 12)
-	diff_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(diff_row)
-	for d in StageData.DIFFS.size():
-		diff_row.add_child(_make_diff_btn(d))
-
-	_info_label = Label.new()
-	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_info_label.add_theme_font_size_override("font_size", 14)
-	_info_label.add_theme_color_override("font_color", MenuArt.CREAM)
-	_info_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_info_label)
-
-	var nav := HBoxContainer.new()
-	nav.alignment = BoxContainer.ALIGNMENT_CENTER
-	nav.add_theme_constant_override("separation", 16)
-	nav.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(nav)
-
-	var back := Button.new()
-	back.text = "← Fase"
-	back.custom_minimum_size = Vector2(170, 50)
-	MenuArt.apply_menu_btn(back, MenuArt.GOLD)
-	back.pressed.connect(func():
-		Sfx.play(self, "click")
-		step = 0
-		_rebuild()
-	)
-	nav.add_child(back)
-
-	var go := Button.new()
-	go.name = "Go"
-	go.text = "COMEÇAR ✧"
-	go.custom_minimum_size = Vector2(240, 50)
-	MenuArt.apply_menu_btn(go, Color(0.4, 0.9, 0.45))
-	go.pressed.connect(func(): _try_start())
-	nav.add_child(go)
-
-	var shop := Button.new()
-	shop.text = "LOJA ◆"
-	shop.custom_minimum_size = Vector2(150, 50)
-	MenuArt.apply_menu_btn(shop, Color(0.55, 0.85, 1))
-	shop.pressed.connect(func():
-		Sfx.play(self, "click")
-		shop_pressed.emit()
-	)
-	nav.add_child(shop)
-
-	_refresh()
-
-## Miniatura procedural da fase (cores + boss da temática).
-class StagePreview extends Control:
-	var stage := 0
-
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		if w <= 0.0 or h <= 0.0:
-			return
-		var st: Dictionary = StageData.STAGES[clampi(stage, 0, StageData.STAGES.size() - 1)]
-		var pal: Dictionary = st.get("palette", {})
-		var grass: Color = pal.get("grass", Color(0.16, 0.42, 0.16))
-		var dirt: Color = pal.get("dirt", Color(0.48, 0.36, 0.22))
-		var water: Color = pal.get("water", Color(0.12, 0.35, 0.62))
-		ArtUtil.fill_rrect(self, 0, 0, w, h, 12, grass.darkened(0.15))
-		# manchas de terra
-		for i in 7:
-			var hx := float(hash(i * 3 + stage * 11) % 1000) / 1000.0
-			var hy := float(hash(i * 7 + 1) % 1000) / 1000.0
-			ArtUtil.fill_ellipse(self, hx * w, hy * h, 26 + hx * 20, 14, Color(dirt, 0.8))
-		# lago
-		ArtUtil.fill_ellipse(self, w * (0.3 + 0.1 * stage), h * 0.62, 52, 22, Color(water, 0.9))
-		# vegetação/pedras da temática
-		for i in 26:
-			var hx := float(hash(i * 13 + stage * 101) % 1000) / 1000.0
-			var hy := float(hash(i * 29 + 7) % 1000) / 1000.0
-			var dot := Color(0.06, 0.16, 0.08)
-			if stage == 1:
-				dot = Color(0.9, 0.45, 0.12, 0.85) if i % 3 == 0 else Color(0.25, 0.2, 0.18)
-			elif stage == 2:
-				dot = Color(0.65, 0.35, 1, 0.85) if i % 3 == 0 else Color(0.12, 0.2, 0.16)
-			draw_circle(Vector2(hx * w, hy * h), 3.0, dot)
-		ArtUtil.stroke_rrect(self, 0, 0, w, h, 12, Color(1, 0.85, 0.3, 0.7), 2.0)
-		var font := ThemeDB.fallback_font
-		var boss := "Boss: %s" % str(st.get("boss", "?"))
-		var tw := font.get_string_size(boss, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-		draw_string(font, Vector2(w - tw - 10, h - 8), boss,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85))
-
-func _section(txt: String) -> Label:
-	return MenuArt.section_label(txt.trim_prefix("— ").trim_suffix(" —"))
-
-func _make_stage_btn(s: int) -> Button:
-	var b := Button.new()
-	b.custom_minimum_size = Vector2(250, 74)
-	MenuArt.apply_small_btn(b, Color(0.5, 0.8, 0.5), 14)
-	var idx := s
-	b.pressed.connect(func():
-		if StageData.is_stage_unlocked(progress, idx):
-			selected_stage = idx
-			if not StageData.is_diff_unlocked(progress, selected_stage, selected_diff):
-				selected_diff = 0
-			Sfx.play(self, "click")
-			_refresh()
-		else:
-			Sfx.play(self, "error")
-	)
-	_stage_btns.append(b)
-	return b
-
-func _make_diff_btn(d: int) -> Button:
-	var b := Button.new()
-	b.custom_minimum_size = Vector2(160, 52)
-	MenuArt.apply_small_btn(b, Color(1, 0.85, 0.4), 15)
-	var idx := d
-	b.pressed.connect(func():
-		if StageData.is_diff_unlocked(progress, selected_stage, idx):
-			selected_diff = idx
-			Sfx.play(self, "click")
-			_refresh()
-		else:
-			Sfx.play(self, "error")
-	)
-	_diff_btns.append(b)
-	return b
 
 func _refresh() -> void:
-	if _preview != null:
-		_preview.stage = selected_stage
-		_preview.queue_redraw()
-	for s in _stage_btns.size():
-		var b := _stage_btns[s]
-		var st: Dictionary = StageData.STAGES[s]
-		var st_col: Color = st.get("color", Color.WHITE)
-		if not StageData.is_stage_unlocked(progress, s):
-			b.text = "🔒 Fase %d\n???" % (s + 1)
-			b.disabled = true
-			b.modulate = Color(0.5, 0.5, 0.55)
-		else:
-			var clears := 0
-			for dd in StageData.DIFFS.size():
-				if StageData.is_cleared(progress, s, dd):
-					clears += 1
-			var mark := "  ✔ %d/%d" % [clears, StageData.DIFFS.size()] if clears > 0 else ""
-			b.text = "Fase %d: %s%s\nBoss: %s" % [s + 1, str(st.get("name", "?")), mark, str(st.get("boss", "?"))]
-			b.disabled = false
-			b.modulate = Color.WHITE
-			var sel := s == selected_stage
-			b.add_theme_stylebox_override("normal", MenuArt.style_btn(st_col, sel))
-			b.add_theme_color_override("font_color", Color.WHITE if sel else MenuArt.CREAM)
-	for d in _diff_btns.size():
-		var b := _diff_btns[d]
-		var dd: Dictionary = StageData.DIFFS[d]
-		var d_col: Color = dd.get("color", Color.WHITE)
-		if not StageData.is_diff_unlocked(progress, selected_stage, d):
-			b.text = "🔒 %s" % str(dd.get("name", "?"))
-			b.disabled = true
-			b.modulate = Color(0.5, 0.5, 0.55)
-		else:
-			var mark := " ✔" if StageData.is_cleared(progress, selected_stage, d) else ""
-			b.text = "%s%s" % [str(dd.get("name", "?")), mark]
-			b.disabled = false
-			b.modulate = Color.WHITE
-			var sel := d == selected_diff
-			b.add_theme_stylebox_override("normal", MenuArt.style_btn(d_col, sel))
-			b.add_theme_color_override("font_color", d_col if sel else MenuArt.CREAM)
-	if _essence_label:
-		_essence_label.text = "%d Essência" % StageData.essence(progress)
-	if _info_label:
-		var gw := StageData.global_wave(selected_stage, 0)
-		_info_label.text = "Ondas %d-%d  •  %s + %s  •  ↑ ↓ fase  •  Q/E dificuldade" % [
-			gw, gw + 4, StageData.stage_name(selected_stage), StageData.diff_name(selected_diff)]
+	for i in _stage_btns.size():
+		var card := _stage_btns[i] as ExpeditionCard
+		card.locked = not StageData.is_stage_unlocked(progress,i)
+		card.disabled = card.locked
+		card.chosen = selected_stage == i
+		card.cleared = StageData.is_cleared(progress,i,0)
+		card.tooltip_text = "Vença %s para liberar." % StageData.stage_name(maxi(0,i-1)) if card.locked else StageData.STAGES[i].desc
+		card.queue_redraw()
+	for i in _diff_btns.size():
+		var card := _diff_btns[i] as ExpeditionCard
+		card.locked = not StageData.is_diff_unlocked(progress,selected_stage,i)
+		card.disabled = card.locked
+		card.chosen = selected_diff == i
+		card.cleared = StageData.is_cleared(progress,selected_stage,i)
+		card.tooltip_text = "Conclua %s neste mapa para liberar." % StageData.diff_name(maxi(0,i-1)) if card.locked else "Multiplicadores aplicados aos inimigos desta expedição."
+		card.queue_redraw()
+	_info_label.text = (StageData.STAGES[selected_stage].desc as String).replace("\n"," ") if step == 0 else "%s  /  %s  •  Sem escolhas de melhorias durante a luta" % [StageData.stage_name(selected_stage),StageData.diff_name(selected_diff)]
 
-func _try_start() -> void:
-	if not StageData.is_stage_unlocked(progress, selected_stage):
-		return
-	if not StageData.is_diff_unlocked(progress, selected_stage, selected_diff):
-		return
-	Sfx.play(self, "click")
-	start_pressed.emit(selected_stage, selected_diff)
+func _confirm() -> void:
+	if step == 0: _to_step_1()
+	else: _try_start()
 
-func _process(delta: float) -> void:
-	if not visible:
-		return
-	_tick = MenuArt.back_tick(self, delta, _tick)[0]
+func _to_step_1() -> void:
+	step = 1
+	Sfx.play(self,"click")
+	_rebuild()
 
-func _draw() -> void:
-	MenuArt.draw_back(self, size, _tick)
-	MenuArt.draw_screen_frame(self, size)
-
-func handle_key(key: int) -> bool:
-	if step == 0:
-		if key == KEY_UP or key == KEY_W or key == KEY_LEFT or key == KEY_A:
-			_cycle_stage(-1)
-			return true
-		elif key == KEY_DOWN or key == KEY_S or key == KEY_RIGHT or key == KEY_D:
-			_cycle_stage(1)
-			return true
-		elif key == KEY_ENTER or key == KEY_KP_ENTER:
-			_to_step_1()
-			return true
-		elif key == KEY_ESCAPE:
-			back_pressed.emit()
-			return true
-		return false
-	if key == KEY_Q:
-		_cycle_diff(-1)
-		return true
-	elif key == KEY_E:
-		_cycle_diff(1)
-		return true
-	elif key == KEY_ENTER or key == KEY_KP_ENTER:
-		_try_start()
-		return true
-	elif key == KEY_ESCAPE or key == KEY_BACKSPACE:
+func _back() -> void:
+	Sfx.play(self,"click")
+	if step == 0: back_pressed.emit()
+	else:
 		step = 0
 		_rebuild()
+
+func _try_start() -> void:
+	if StageData.is_stage_unlocked(progress,selected_stage) and StageData.is_diff_unlocked(progress,selected_stage,selected_diff):
+		Sfx.play(self,"click")
+		start_pressed.emit(selected_stage,selected_diff)
+
+func handle_key(key: int) -> bool:
+	if key in [KEY_LEFT,KEY_UP,KEY_A,KEY_W,KEY_Q,KEY_RIGHT,KEY_DOWN,KEY_D,KEY_S,KEY_E]:
+		var direction := -1 if key in [KEY_LEFT,KEY_UP,KEY_A,KEY_W,KEY_Q] else 1
+		var count := 3 if step == 0 else 4
+		var current := selected_stage if step == 0 else selected_diff
+		for i in count:
+			current = posmod(current+direction,count)
+			var unlocked := StageData.is_stage_unlocked(progress,current) if step == 0 else StageData.is_diff_unlocked(progress,selected_stage,current)
+			if unlocked:
+				_select(current)
+				break
+		return true
+	if key in [KEY_ENTER,KEY_KP_ENTER]:
+		_confirm()
+		return true
+	if key in [KEY_ESCAPE,KEY_BACKSPACE]:
+		_back()
 		return true
 	return false
 
-func _cycle_stage(dir: int) -> void:
-	var s := selected_stage
-	for i in StageData.STAGES.size():
-		s = (s + dir + StageData.STAGES.size()) % StageData.STAGES.size()
-		if StageData.is_stage_unlocked(progress, s):
-			selected_stage = s
-			if not StageData.is_diff_unlocked(progress, selected_stage, selected_diff):
-				selected_diff = 0
-			Sfx.play(self, "click")
-			_refresh()
-			return
+func _process(delta: float) -> void:
+	if visible: _tick = MenuArt.back_tick(self,delta,_tick)[0]
 
-func _cycle_diff(dir: int) -> void:
-	var d := selected_diff
-	for i in StageData.DIFFS.size():
-		d = (d + dir + StageData.DIFFS.size()) % StageData.DIFFS.size()
-		if StageData.is_diff_unlocked(progress, selected_stage, d):
-			selected_diff = d
-			Sfx.play(self, "click")
-			_refresh()
-			return
+func _draw() -> void:
+	MenuArt.draw_back(self,size,_tick)

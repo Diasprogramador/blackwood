@@ -27,14 +27,10 @@ func run() -> void:
 	game.player.gain_exp(36)
 	for i in 18:
 		await process_frame
-	assert(paused and game.upgrade_menu.visible)
-	await capture(output.path_join("blackwood-evolucao.png"))
-	game.upgrade_menu._choose(0)
+	assert(not paused and game.state == game.State.PLAY)
+	await capture(output.path_join("blackwood-combate.png"))
 	await process_frame
 	game.state = game.State.PAUSE
-	game.player.aura_rank = 2
-	game.player.strike_count = 3
-	game.player.attack_speed_mult = 1.6
 	game.player.max_hp = 10000
 	game.player.hp = 10000
 	game.wave_quota = 1000
@@ -55,12 +51,8 @@ func run() -> void:
 		game.enemies.append(enemy)
 	game.state = game.State.PLAY
 	var samples: Array[float] = []
-	var choices := 0
 	var peak_enemies: int = game.enemies.size()
 	for i in 900:
-		if game.state == game.State.UPGRADE:
-			choices += 1
-			game.upgrade_menu._choose(0)
 		var before := Time.get_ticks_usec()
 		await process_frame
 		if i > 60:
@@ -72,7 +64,7 @@ func run() -> void:
 	var total := 0.0
 	for sample in samples:
 		total += sample
-	print("COMBAT_PROBE " + JSON.stringify({"mean_ms": total / samples.size(), "p95_ms": samples[int(samples.size() * 0.95)], "peak_enemies": peak_enemies, "kills": game.kill_count, "level": game.player.level, "choices": choices, "game_seconds": game.game_time}))
+	print("COMBAT_PROBE " + JSON.stringify({"mean_ms": total / samples.size(), "p95_ms": samples[int(samples.size() * 0.95)], "peak_enemies": peak_enemies, "kills": game.kill_count, "level": game.player.level, "game_seconds": game.game_time}))
 	game.state = game.State.PAUSE
 	game.start_game(0, 1, 0, 99)
 	game.state = game.State.PAUSE
@@ -91,7 +83,7 @@ func run() -> void:
 	for i in 5:
 		await process_frame
 	await capture(output.path_join("blackwood-derrota.png"))
-	print("RENDER_CHECKS passed: cached maps, upgrade dialog, combat, stage regeneration, defeat")
+	print("RENDER_CHECKS passed: cached maps, uninterrupted level up, combat, stage regeneration, defeat")
 	game.queue_free()
 	await process_frame
 	await create_timer(0.5).timeout

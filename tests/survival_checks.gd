@@ -35,48 +35,25 @@ func run() -> void:
 	check(hit != null and enemies[0].hp < enemies[0].max_hp, "Basic attack should damage nearest target")
 	check(game.player.mana == mana, "Automatic basic attack must not consume mana")
 	check(game.player.basic_attack(enemies) == null, "Cooldown must prevent a second immediate attack")
-	RunUpgrades.apply(game.player, "strikes")
-	game.player.attack_cd = 0.0
-	hit = game.player.basic_attack(enemies)
-	check(hit.hits.size() == 2 and enemies[1].hp < enemies[1].max_hp, "Branching upgrade should damage two enemies")
-	check(enemies[2].hp == enemies[2].max_hp, "Branching attack must respect range")
-	RunUpgrades.apply(game.player, "haste")
-	game.player.attack_cd = 0.0
-	game.player.basic_attack(enemies)
-	check(game.player.attack_cd < Player.ATTACK_CD, "Haste should shorten actual cooldown")
-	for i in 5:
-		RunUpgrades.apply(game.player, "strikes")
-	check(game.player.strike_count == 4, "Upgrade stack limits must be enforced")
-	var offers := RunUpgrades.offer(game.player)
-	var ids := {}
-	for option in offers:
-		ids[option.id] = true
-		check(option.id != "strikes", "Capped upgrades must leave the offer pool")
-	check(offers.size() == 3 and ids.size() == 3, "Offer should contain three distinct choices")
-	check(not RunUpgrades.apply(game.player, "invalid"), "Invalid upgrades must be rejected")
+	check(enemies[1].hp == enemies[1].max_hp, "Basic attack must remain single-target without free branching upgrades")
 	var notices := [0]
 	game.player.leveled_up.connect(func(_msg): notices[0] += 1)
+	game.player.hp = 1
+	game.player.mana = 0
+	var base_hp: int = game.player.max_hp
 	game.player.gain_exp(87)
 	await process_frame
-	check(notices[0] == 2 and game.player.level == 3, "Large XP grants should enqueue every crossed level")
-	check(game.state == game.State.UPGRADE and paused, "Upgrade choice must freeze the game")
-	var position: Vector2 = game.player.position
-	var cooldown: float = game.player.attack_cd
-	for i in 5:
-		await process_frame
-	check(game.player.position == position and game.player.attack_cd == cooldown, "Movement and cooldowns must freeze during choice")
-	var key := InputEventKey.new()
-	key.physical_keycode = KEY_1
-	key.pressed = true
-	game.upgrade_menu._unhandled_key_input(key)
-	await process_frame
-	check(game._pending_upgrades == 1 and paused, "Keyboard selection should open the next queued choice")
-	game.upgrade_menu._choose(0)
-	await process_frame
-	check(game._pending_upgrades == 0 and not paused and game.state == game.State.PLAY, "Final choice should resume gameplay")
+	check(notices[0] == 2 and game.player.level == 3, "Large XP grants should process every crossed level")
+	check(game.state == game.State.PLAY and not paused, "Level up must keep combat running without improvement choices")
+	check(game.player.hp == 1+game.player.max_hp-base_hp, "Level up must only grant its added health, not a percentage refill")
+	check(game.player.mana == 16, "Two levels should restore only the added mana capacity")
+	check(game.player.strike_count == 1 and game.player.aura_rank == 0 and game.player.attack_speed_mult == 1, "Levels must not grant free multi-hit, aura or haste")
+	var growth: int = game.player.max_hp-base_hp
+	game.player.gain_exp(game.player.exp_to_next()+75)
+	check(game.player.max_hp-base_hp <= growth*2, "Health growth must stay linear instead of compounding")
 	game.start_game(2, 0, 0, 4242)
 	game.player.controlled = false
-	check(game.player.strike_count == 1 and game.player.aura_rank == 0 and game.player.run_upgrade_counts.is_empty(), "Restart must reset temporary build")
+	check(game.player.strike_count == 1 and game.player.aura_rank == 0, "Restart must retain baseline combat stats")
 	await process_frame
 	var dash_key := InputEventKey.new()
 	dash_key.physical_keycode = KEY_SHIFT

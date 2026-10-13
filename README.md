@@ -39,23 +39,23 @@ Sprites originais do Canva em `assets/sprites/original/`, ícones vetoriais pró
 
 Progresso (`essência ◆`) e configurações ficam em `user://` — sobreviva às ondas para desbloquear skills no menu.
 
-## Combate e builds de sobrevivência
+## Combate e progressão
 
-O ataque básico agora é **automático**, sem custo de mana. Espaço continua
-disponível para dispará-lo manualmente; habilidades continuam nas teclas 1–5.
-No solo, Shift executa uma esquiva na direção do movimento (ou para onde o
-personagem olha), com recarga de 1,6 s. No touch, o botão principal vira ESQUIVA.
+O ataque básico é **automático**, sem custo de mana. Espaço também permite
+atacar manualmente; habilidades usam as teclas 1–5. No solo, Shift executa uma
+esquiva na direção do movimento (ou na última direção), com recarga de 1,6 s.
+No touch, o botão principal é ESQUIVA e o layout continua personalizável.
 
-Inimigos deixam cristais de XP no solo. Aproxime-se para atraí-los e subir de
-nível; cada nível pausa a partida e oferece três melhorias aleatórias, escolhidas
-com clique/toque ou teclas 1, 2 e 3. Poder, velocidade de ataque, movimento,
-golpes em vários alvos, aura de espinhos e vida podem ser combinados. Os limites
-de acúmulo são respeitados; a build é reiniciada a cada partida e não custa essência.
-A primeira evolução exige 36 XP. As ondas têm mais inimigos e reforços mais rápidos.
+Os cristais de XP mantêm a progressão de nível, agora **sem pausa e sem escolhas
+de melhorias gratuitas**. Não há bônus de aura, múltiplos alvos ou velocidade
+concedidos ao subir de nível. A vida máxima cresce de forma linear, e vida/mana
+recuperam apenas a capacidade acrescentada pelo nível. A primeira subida exige
+36 XP. A loja da partida e os desbloqueios permanentes continuam disponíveis.
 
-O co-op mantém a experiência compartilhada: básico automático, XP direto e bônus
-de nível existentes. As escolhas de build e a esquiva são, por enquanto, do solo;
-assim não são enviadas mudanças de estado que o protocolo atual não replica.
+No desktop, clique nas habilidades, esquiva, item, mana, loja e pausa no HUD.
+Passe o mouse sobre uma habilidade para consultar custo, recarga e descrição.
+O co-op continua com XP compartilhada e ações enviadas ao host; a esquiva
+permanece exclusiva do solo.
 
 ## Otimização e validação
 
@@ -114,6 +114,19 @@ theme/game_theme.tres
 - `scripts/stage_data.gd` — fases, dificuldades, cotas de onda, essências e desbloqueios.
 - `scripts/champ_data.gd` — campeões, roles e skills.
 - `scripts/game_settings.gd` — volumes, teclas, fullscreen e screen shake (`user://rpg_league_settings.cfg`).
+
+## Atualização 0.7.0 — Fronteira de Ferro
+
+Seleção de mapas ilustrada, dificuldades com seus multiplicadores e HUD com
+retrato, vida perdida animada, progresso das cinco ondas e recargas circulares.
+Ataques têm lâminas em camadas, rastros, fragmentos e impactos por personagem.
+As escolhas de melhorias gratuitas foram removidas para recuperar o desafio.
+
+Teste gráfico e de interação (pasta de saída existente):
+
+```sh
+godot --path . --script res://tests/interface_checks.gd -- exports/interface
+```
 
 ## Atualização 0.6.0 — Três Reinos
 

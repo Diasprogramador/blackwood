@@ -101,10 +101,10 @@ static func time_for(type: int) -> float:
 	if type >= ROLE_FX_BASE:
 		var slot := slot_of(type)
 		if slot >= 5:
-			return 0.55
+			return 0.72
 		if slot >= 1:
-			return 0.36
-		return 0.28
+			return 0.48
+		return 0.38
 	return 0.26
 
 # ======================================================================
@@ -170,6 +170,7 @@ func _draw() -> void:
 			_draw_pixel_attack(fam, slot, t, inv)
 		else:
 			_draw_role(fam, slot, t, inv)
+			_impact_layers(fam, slot, t, inv)
 		return
 	match type:
 		Type.SLASH: _draw_slash(t, inv)
@@ -181,53 +182,94 @@ func _draw() -> void:
 		Type.FROST_ARROW: _draw_magic_burst(t, inv)
 		Type.CHANNEL: _draw_channel_aura()
 
-## Deliberate three-phase attacks, snapped to a two-pixel grid. One node,
-## bounded primitive count; no particles, lights or full-screen shaders.
+## Layered silhouettes, trailing ribbons and ballistic fragments. Effects remain
+## cosmetic: reach and damage are still determined by Player combat logic.
 func _draw_pixel_attack(fam: int, slot: int, t: float, inv: float) -> void:
-	var palette: Array = PAL[clampi(fam, 0, 4)]
-	var color: Color = palette[0]
-	var light: Color = palette[2]
-	var reach := (26.0 + slot * 5.0) * fx_scale
-	var phase := floorf(inv * 8.0) / 8.0
-	var count := 5 if _q() >= 2 else 9
-	var dir := Vector2.from_angle(angle)
-	var side := dir.orthogonal()
+	var p := pal_of(fam)
+	var c: Color = p[0]
+	var hi: Color = p[2]
+	var progress := 1.0-pow(1.0-inv,3)
+	var reach := 39.0*fx_scale
 	if fam <= 1:
-		# Sweeping blade: dark silhouette, colored edge, bright impact tip.
-		var start := angle - 1.8 + phase * 2.2
-		var previous := (Vector2.from_angle(start) * reach).snapped(Vector2(2, 2))
-		for i in count:
-			var a := start + float(i + 1) / count * 1.8
-			var point := (Vector2.from_angle(a) * reach).snapped(Vector2(2, 2))
-			draw_line(previous, point, Color(palette[1], t), 10.0, false)
-			draw_line(previous, point, Color(color, t), 6.0, false)
-			if i > count / 2:
-				draw_line(previous, point, Color(light, t), 2.0, false)
-			previous = point
+		var sweep := angle-1.9+progress*2.0
+		for echo in (1 if _q() >= 2 else 3):
+			var radius := reach-echo*6.0*fx_scale
+			_ribbon(radius,sweep-echo*0.22,1.9,11.0*fx_scale,Color(p[1],t*0.7))
+			_ribbon(radius,sweep-echo*0.22,1.9,7.0*fx_scale,Color(c,t/(echo+1)))
+			_ribbon(radius+2,sweep-echo*0.22,1.45,2.0*fx_scale,Color(hi,t/(echo+1)))
+		if fam == 1:
+			var dir := Vector2.from_angle(angle-0.65)
+			draw_line(-dir*reach,dir*reach,Color(p[3],t*0.85),3)
+		var tip := Vector2.from_angle(sweep+1.9)*reach
+		_glint(tip,9*t*fx_scale,hi)
+	elif fam == 2:
+		_streak(t,c,hi)
+		for i in (2 if _q() >= 2 else 4):
+			var radius := (13+i*7+progress*10)*fx_scale
+			draw_arc(Vector2.ZERO,radius,angle+i*1.5+inv*2,angle+i*1.5+inv*2+PI, _segs(18),Color(c,t*0.65),2)
+		for i in 3:
+			var point := Vector2.from_angle(angle+i*TAU/3+inv)*reach*(0.5+inv)
+			_glint(point,6*t*fx_scale,hi)
+		_core(t,inv,hi,10)
 	elif fam == 3:
-		# Ice arrow leaves a short segmented wake behind the impact.
-		for i in 5:
-			var center := (-dir * (i * 12.0 + phase * 14.0)).snapped(Vector2(2, 2))
-			draw_line(center - side * 4, center + dir * 8, Color(color, t * (1.0 - i * 0.15)), 3, false)
-			draw_line(center + side * 4, center + dir * 8, Color(light, t * (1.0 - i * 0.15)), 2, false)
+		var dir := Vector2.from_angle(angle)
+		var side := dir.orthogonal()
+		var tip := dir*(progress*25-10)*fx_scale
+		var tail := -dir*(65-progress*20)*fx_scale
+		draw_line(tail,tip,Color(p[1],t*0.6),12*fx_scale)
+		draw_line(tail,tip,Color(c,t*0.8),5*fx_scale)
+		draw_line(tail+dir*14,tip,Color(hi,t),2*fx_scale)
+		draw_colored_polygon(PackedVector2Array([tip+dir*16*fx_scale,tip+side*7*fx_scale,tip-dir*9*fx_scale,tip-side*7*fx_scale]),Color(c,t))
+		draw_line(tip-dir*8,tip+dir*15,Color(hi,t),2)
+		for i in 3:
+			var point := tail+dir*i*13
+			draw_line(point-side*7,point+dir*8,Color(c,t*0.7),2)
+			draw_line(point+side*7,point+dir*8,Color(c,t*0.7),2)
 	else:
-		# Lantern star / healing leaves have different radial silhouettes.
-		for i in count:
-			var a := TAU * i / count + phase * 0.7
-			var center := (Vector2.from_angle(a) * reach * (0.3 + phase)).snapped(Vector2(2, 2))
-			var sz := 4.0 if fam == 4 else 6.0
-			draw_rect(Rect2(center - Vector2(sz, 2), Vector2(sz * 2, 4)), Color(color, t))
-			draw_rect(Rect2(center - Vector2(2, sz), Vector2(4, sz * 2)), Color(light, t))
-	# Impact flash is brief so the target remains readable.
-	if inv < 0.45:
-		var core := 12.0 * (1.0 - inv / 0.45) * fx_scale
-		draw_rect(Rect2(-core, -2, core * 2, 4), light)
-		draw_rect(Rect2(-2, -core, 4, core * 2), light)
+		_streak(t,c,hi)
+		for i in (4 if _q() >= 2 else 7):
+			var a := angle+i*TAU/7+progress*1.5
+			var point := Vector2.from_angle(a)*reach*(0.25+progress*0.85)
+			_leaf(point,8*fx_scale,a+PI/3,t,c)
+			draw_arc(Vector2.ZERO,point.length(),a-0.5,a,8,Color(p[3],t*0.5),1.5)
+		_core(t,inv,hi,7)
+	_impact_layers(fam,slot,t,inv)
+
+func _ribbon(radius: float, start: float, sweep: float, width: float, color: Color) -> void:
+	var points := PackedVector2Array()
+	var count := _segs(20)
+	for i in count+1:
+		var k := float(i)/count
+		points.append(Vector2.from_angle(start+sweep*k)*(radius+width*k))
+	for i in range(count,-1,-1):
+		var k := float(i)/count
+		points.append(Vector2.from_angle(start+sweep*k)*(radius-width*k*0.3))
+	draw_colored_polygon(points,color)
+
+func _glint(point: Vector2, radius: float, color: Color) -> void:
+	if radius <= 2.0: return
+	draw_colored_polygon(PackedVector2Array([point+Vector2(-radius,0),point+Vector2(-2,-2),point+Vector2(0,-radius),point+Vector2(2,-2),point+Vector2(radius,0),point+Vector2(2,2),point+Vector2(0,radius),point+Vector2(-2,2)]),color)
+
+func _impact_layers(fam: int, slot: int, t: float, inv: float) -> void:
+	var p := pal_of(fam)
+	var c: Color = p[0]
+	var hi: Color = p[2]
+	var power := (1.0+slot*0.12)*fx_scale
+	# Thin pressure rings sit below the flash; transparent interiors preserve targets.
 	if _q() < 2:
-		for i in 5:
-			var a := angle + i * 1.256
-			var point := (Vector2.from_angle(a) * reach * (0.4 + phase * 1.5)).snapped(Vector2(2, 2))
-			draw_rect(Rect2(point, Vector2(3, 3)), Color(color, t))
+		var radius := (10+sqrt(inv)*37)*power
+		for i in 3:
+			draw_arc(Vector2.ZERO,radius+i*3,angle+i*2.1,angle+i*2.1+1.3,_segs(12),Color(c,t*t*0.3),2)
+	var count := 4 if _q() >= 2 else (7 if _q() == 1 else 11)
+	for i in count:
+		var a := angle+float(i)*2.39996
+		var speed := 27.0+float(i%4)*10
+		var point := Vector2.from_angle(a)*speed*inv*power
+		point.y += inv*inv*22*power
+		var dir := Vector2.from_angle(a)
+		draw_line(point-dir*(3+7*t)*power,point,Color(hi if i%3==0 else c,t*t),2 if i%2==0 else 1)
+	if inv < 0.24:
+		_glint(Vector2.ZERO,(1.0-inv/0.24)*17*power,Color(hi,t))
 
 # ----------------------------------------------------------------------
 #  Primitivas (todas leem GameSettings.quality_cache)

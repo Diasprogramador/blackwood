@@ -29,7 +29,6 @@ var move_speed_mult := 1.0
 var strike_count := 1
 var aura_rank := 0
 var aura_cd := 0.0
-var run_upgrade_counts: Dictionary = {}
 var dash_enabled := true
 var dash_cd := 0.0
 var dash_t := 0.0
@@ -134,7 +133,6 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 	strike_count = 1
 	aura_rank = 0
 	aura_cd = 0.0
-	run_upgrade_counts.clear()
 	dash_cd = 0.0
 	dash_t = 0.0
 	invulnerable_t = 0.0
@@ -536,26 +534,24 @@ func gain_exp(amount: int) -> String:
 		xp -= exp_to_next()
 		level += 1
 		_on_level_up()
-		msg = "LEVEL UP! Lv.%d  +%d HP  +%d ATK  +%d DEF  +%d MAG" % [
-			level, maxi(8, int(max_hp / 8.0)), maxi(1, int(attack / 6.0)), maxi(1, int(defense / 6.0)), maxi(1, int(magic / 6.0))
-		]
+		msg = "Nível %d • atributos fortalecidos" % level
 	return msg
 
 func exp_to_next() -> int:
 	return 24 + level * 12 + (level - 1) * (level - 1) * 3
 
 func _on_level_up() -> void:
-	var hp_gain := maxi(8, int(max_hp / 8.0))
+	var hp_gain := maxi(8, int(ChampData.ROLES[role].hp / 12.0))
 	max_hp += hp_gain
 	max_mana += 8
 	attack += maxi(1, int(ChampData.ROLES[role].atk / 6.0))
 	defense += maxi(1, int(ChampData.ROLES[role].def / 6.0))
 	magic += maxi(1, int(ChampData.ROLES[role].mag / 6.0))
 	crit_chance = minf(0.5, crit_chance + 0.015)
-	# Level up cura 60% em vez de 100% (jogo mais difícil).
-	hp = mini(max_hp, hp + int(max_hp * 0.6))
-	mana = max_mana
-	leveled_up.emit("Nível %d! Escolha seu próximo poder." % level)
+	# Crescimento linear; subir de nível não apaga o desgaste da luta.
+	hp = mini(max_hp, hp + hp_gain)
+	mana = minf(max_mana, mana + 8)
+	leveled_up.emit("Nível %d • atributos fortalecidos" % level)
 
 func upgrade_cost(type_idx: int) -> int:
 	var base: int = ChampData.UPGRADE_BASE_COST[type_idx]
