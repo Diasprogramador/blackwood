@@ -33,3 +33,10 @@ No touch, preservar os controles personalizados e deslocar avisos do joystick.
 Ataques: antecipação curta, fio luminoso, impacto e fragmentos; custo limitado
 pela qualidade. Retirar escolhas de melhorias, cura percentual e crescimento
 composto da vida. Lojas e desbloqueios já conquistados permanecem.
+
+## Correção — Dádivas do Bosque
+O usuário queria retirar a tabela paga, não as escolhas por nível. Restaurar
+estas escolhas no solo: três cartas, selos próprios, grau/limite e efeito explícito.
+Paleta ForestUI mantida; título 32 px, poder 22 px, descrição 17 px. A carta toda
+é clicável, com foco e toque; nada de fechar sem receber o poder. A loja agora
+é Provisões do Bosque e mantém apenas itens. Não confundir estes dois sistemas.

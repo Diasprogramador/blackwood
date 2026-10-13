@@ -44,11 +44,21 @@ func run() -> void:
 	game.player.gain_exp(87)
 	await process_frame
 	check(notices[0] == 2 and game.player.level == 3, "Large XP grants should process every crossed level")
-	check(game.state == game.State.PLAY and not paused, "Level up must keep combat running without improvement choices")
-	check(game.player.hp == 1+game.player.max_hp-base_hp, "Level up must only grant its added health, not a percentage refill")
+	check(game.state == game.State.UPGRADE and paused, "Level up must pause for a power choice")
+	check(game._pending_upgrades == 2, "Every crossed level must queue a choice")
 	check(game.player.mana == 16, "Two levels should restore only the added mana capacity")
-	check(game.player.strike_count == 1 and game.player.aura_rank == 0 and game.player.attack_speed_mult == 1, "Levels must not grant free multi-hit, aura or haste")
-	var growth: int = game.player.max_hp-base_hp
+	var gold_before: int = game.player.gold
+	game._choose_run_upgrade("invalid")
+	check(game._pending_upgrades == 2, "Invalid offers cannot consume a level")
+	for i in 2:
+		game._choose_run_upgrade(game._current_offers[0].id)
+		await process_frame
+	check(game.state == game.State.PLAY and not paused and game._pending_upgrades == 0, "Resolving all choices must resume combat")
+	check(game.player.gold == gold_before, "Level choices must not cost gold")
+	check(game.player.hp == 1+game.player.max_hp-base_hp, "Level up must only grant its added health, not a percentage refill")
+	check(not game.player.buy_upgrade(0), "Removed stat purchases must be rejected")
+	base_hp = game.player.max_hp
+	var growth: int = maxi(8,int(ChampData.ROLES[game.player.role].hp/12.0))
 	game.player.gain_exp(game.player.exp_to_next()+75)
 	check(game.player.max_hp-base_hp <= growth*2, "Health growth must stay linear instead of compounding")
 	game.start_game(2, 0, 0, 4242)
@@ -108,6 +118,13 @@ func run() -> void:
 	check(paused, "Pause must freeze the scene tree")
 	game._set_pause(false)
 	check(not paused, "Resume must unfreeze the scene tree")
+	var probe := Player.new()
+	for option in RunUpgrades.OPTIONS:
+		for i in int(option.limit):
+			check(RunUpgrades.apply(probe,option.id), "Every power must apply until its cap")
+		check(not RunUpgrades.apply(probe,option.id), "Power caps must reject extra ranks")
+	check(RunUpgrades.offer(probe).is_empty(), "Maxed powers must not appear again")
+	probe.free()
 	game.mp = 1
 	game.start_game(2, 0, 0, 4242, [0])
 	check(not game.player.dash_enabled, "Solo dash must not desync co-op")

@@ -4,7 +4,7 @@ extends Node2D
 ## spawn, câmera, drop de gold e integração das UIs.
 ## Port de Main.java (modo gráfico) + GamePanel.java (loop, spawn, input, overlays).
 
-enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE }
+enum State { MENU, SETTINGS, CHAMP, STAGE, MENUSHOP, PLAY, PAUSE, SHOP, GAMEOVER, VICTORY, MULTI, PROFILE, UPGRADE }
 
 const WorldScript := preload("res://scripts/world.gd")
 const PlayerScript := preload("res://scripts/player.gd")
@@ -77,6 +77,9 @@ var settings_ui: SettingsMenu
 var pause_layer: Control
 var gameover_layer: Control
 var victory_layer: Control
+var upgrade_menu: RunUpgradeMenu
+var _pending_upgrades := 0
+var _current_offers: Array = []
 var settings: Dictionary = GameSettings.default_data()
 var _shop_return: State = State.MENU
 
@@ -249,6 +252,9 @@ func _ready() -> void:
 	_build_pause_ui(ui_root)
 	_build_gameover_ui(ui_root)
 	_build_victory_ui(ui_root)
+	upgrade_menu = RunUpgradeMenu.new()
+	upgrade_menu.chosen.connect(_choose_run_upgrade)
+	ui_root.add_child(upgrade_menu)
 
 	_enter_menu()
 
@@ -487,6 +493,7 @@ func _build_victory_ui(parent: Node) -> void:
 #  FLUXO DE TELAS (menu → campeão → fase → jogo)
 # =====================================================================
 func _hide_all() -> void:
+	if upgrade_menu != null: upgrade_menu.hide()
 	if touch_ui != null:
 		touch_ui.hide()
 	hud.visible = false
@@ -822,6 +829,9 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 			say(msg)
 			_float_text(msg, player.position + Vector2(0, -40), Color(1, 0.9, 0.4), 13)
 			Sfx.play(self, "levelup")
+			if mp == 0:
+				_pending_upgrades += 1
+				_open_run_upgrade.call_deferred()
 	)
 	entities.add_child(player)
 	_update_camera_limits()
@@ -857,7 +867,38 @@ func start_game(champ_idx: int = -1, stage_idx: int = -1, diff_idx: int = -1, se
 	else:
 		say("Bem-vindo, %s! %s • %s (%d/5 skills)" % [c.nome, StageData.stage_name(cur_stage), StageData.diff_name(cur_diff), nskills])
 		say("%s = soco | 1-%d = skills | %s = loja" % [atk_key, nskills, shop_key])
-	say("Ataque automático • use esquiva, habilidades e o terreno para sobreviver.")
+	say("Ataque automático • colete cristais e escolha poderes ao subir de nível." if mp == 0 else "Ataque automático • lute em equipe e colete experiência.")
+
+func _open_run_upgrade() -> void:
+	if mp != 0 or state != State.PLAY or _pending_upgrades <= 0 or player == null or not player.is_alive():
+		return
+	_current_offers = RunUpgrades.offer(player)
+	if _current_offers.is_empty():
+		_pending_upgrades = 0
+		return
+	state = State.UPGRADE
+	get_tree().paused = true
+	upgrade_menu.open(_current_offers, player.level - _pending_upgrades + 1, player.run_upgrade_counts, _pending_upgrades)
+	_update_touch()
+
+func _choose_run_upgrade(id: String) -> void:
+	if state != State.UPGRADE:
+		return
+	var offered := false
+	for option in _current_offers:
+		if option.id == id:
+			offered = true
+	if not offered or not RunUpgrades.apply(player, id):
+		upgrade_menu.open(_current_offers, player.level - _pending_upgrades + 1, player.run_upgrade_counts, _pending_upgrades)
+		return
+	upgrade_menu.hide()
+	_pending_upgrades -= 1
+	_current_offers.clear()
+	get_tree().paused = false
+	state = State.PLAY
+	Sfx.play(self, "buy", -6.0)
+	_update_touch()
+	_open_run_upgrade.call_deferred()
 
 ## Spawna um aliado P2..P4 (host simula, client só renderiza).
 func _spawn_ally(champ_idx: int, slot: int) -> void:
@@ -949,6 +990,9 @@ func _diff_mults() -> Dictionary:
 	return m
 
 func _clear_world() -> void:
+	_pending_upgrades = 0
+	_current_offers.clear()
+	if upgrade_menu != null: upgrade_menu.hide()
 	_hud_edges.clear()
 	get_tree().paused = false
 	for e in enemies:
@@ -1934,12 +1978,15 @@ func _open_shop() -> void:
 	state = State.SHOP
 	_set_ally_controlled(false)
 	shop.open()
+	_update_touch()
 
 func _close_shop() -> void:
 	shop.close()
 	if mp == 0:
 		state = State.PLAY
 		_set_ally_controlled(true)
+	_update_touch()
+	_open_run_upgrade.call_deferred()
 
 ## Trava/destrava o movimento com a loja aberta (solo pausa o mundo).
 func _set_ally_controlled(v: bool) -> void:
@@ -1953,6 +2000,7 @@ func _set_pause(v: bool) -> void:
 	get_tree().paused = v
 	pause_layer.visible = v
 	state = State.PAUSE if v else State.PLAY
+	if not v: _open_run_upgrade.call_deferred()
 	if mp == 1:
 		say("⏸ Host pausou." if v else "▶ Host continuou!")
 		if _relay():
@@ -2050,22 +2098,9 @@ func _do_cast(index: int, pl: Player = null) -> void:
 	if not target.is_alive():
 		_on_enemy_killed(target)
 
-func try_buy_upgrade(idx: int, pl: Player = null) -> void:
-	if mp == 2 and pl == null:
-		netplay.send_buy_upgrade(idx)
-		return
-	var q := pl if pl != null else player
-	if q == null:
-		return
-	if idx < 0 or idx >= ChampData.UPGRADE_DESCS.size():
-		return
-	if q.buy_upgrade(idx):
-		say("Comprado: %s" % ChampData.UPGRADE_DESCS[idx])
-		Sfx.play(self, "buy")
-		_spawn_heal(q.position, q.role)
-	else:
-		say("Gold insuficiente!")
-		Sfx.play(self, "error")
+func try_buy_upgrade(_idx: int, _pl: Player = null) -> void:
+	# Legacy network messages cannot purchase removed stat upgrades.
+	return
 
 func _use_first_item(pl: Player = null) -> void:
 	if mp == 2 and pl == null:

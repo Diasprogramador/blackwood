@@ -38,6 +38,7 @@ var _dash_direction := Vector2.RIGHT
 ## Habilidades desbloqueadas (no menu, com ◆). Começa vazia: só ATK básico.
 ## Cada item: {cfg, cd_left}. Máximo = ChampData.SKILL_SLOTS (5, teclas 1-5).
 var skills: Array = []  # [{cfg, cd_left}]
+var run_upgrade_counts := {}
 var upgrade_counts := [0, 0, 0, 0, 0, 0]
 
 # Inventário (port de Player.java)
@@ -154,6 +155,7 @@ func setup(p_name: String, p_role: String, skill_cfgs: Array = []) -> void:
 		if skills.size() >= ChampData.SKILL_SLOTS:
 			break
 		skills.append({ cfg = sk, cd_left = 0.0 })
+	run_upgrade_counts.clear()
 	upgrade_counts = [0, 0, 0, 0, 0, 0]
 	inventory.clear()
 	weapon = null
@@ -557,23 +559,8 @@ func upgrade_cost(type_idx: int) -> int:
 	var base: int = ChampData.UPGRADE_BASE_COST[type_idx]
 	return base + int(upgrade_counts[type_idx] * base * 0.75)
 
-func buy_upgrade(type_idx: int) -> bool:
-	var cost := upgrade_cost(type_idx)
-	if gold < cost:
-		return false
-	gold -= cost
-	upgrade_counts[type_idx] += 1
-	match type_idx:
-		0:
-			max_hp += 30
-			hp += 30
-		1: attack += 5
-		2: defense += 4
-		3: magic += 4
-		4: crit_chance = minf(0.75, crit_chance + 0.05)
-		5: mana_regen += 1.5
-	gold_changed.emit(gold)
-	return true
+func buy_upgrade(_type_idx: int) -> bool:
+	return false # Stat purchases were removed; power comes from level choices.
 
 func add_gold(amount: int) -> void:
 	gold += amount

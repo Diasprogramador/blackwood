@@ -1,14 +1,9 @@
 class_name ShopUI
 extends Control
 
-## Loja de melhorias integrada ao visual do jogo:
-## painel "de floresta" com madeira, musgo e dourado — em vez do azul chapado.
+## Provisões compradas com ouro; poderes são escolhas de nível.
 
 signal closed
-
-const NAMES := ChampData.UPGRADE_NAMES
-const DESCS := ChampData.UPGRADE_DESCS
-const ICONS := ChampData.UPGRADE_ICONS
 
 var main  # Main
 var _rows: Array[Button] = []
@@ -44,7 +39,7 @@ func _build() -> void:
 	# painel central
 	var panel := MenuArt.FramePanel.new()
 	panel.name = "Panel"
-	panel.custom_minimum_size = Vector2(580, 600)
+	panel.custom_minimum_size = Vector2(580, 580)
 	center.add_child(panel)
 
 	var sb := StyleBoxFlat.new()
@@ -69,7 +64,7 @@ func _build() -> void:
 	vbox.add_child(header)
 
 	var title := Label.new()
-	title.text = "⚜  MELHORIAS DA RIFT"
+	title.text = "PROVISÕES DO BOSQUE"
 	title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.35))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -84,6 +79,13 @@ func _build() -> void:
 	_gold_delta.add_theme_font_size_override("font_size", 14)
 	_gold_delta.add_theme_color_override("font_color", Color(0.5, 1, 0.55))
 	header.add_child(_gold_delta)
+	var close_button := Button.new()
+	close_button.text = "FECHAR"
+	close_button.custom_minimum_size = Vector2(80,44)
+	ForestUI.button(close_button)
+	close_button.add_theme_font_size_override("font_size",13)
+	close_button.pressed.connect(func(): main._close_shop())
+	header.add_child(close_button)
 
 	_stats_label = Label.new()
 	_stats_label.add_theme_font_size_override("font_size", 13)
@@ -96,7 +98,7 @@ func _build() -> void:
 	vbox.add_child(_inv_label)
 
 	var tagline := Label.new()
-	tagline.text = "Ouro some, poder fica — equipe-se para a próxima onda."
+	tagline.text = "Use ouro em itens. Novos poderes são escolhidos ao subir de nível."
 	tagline.add_theme_font_size_override("font_size", 12)
 	tagline.add_theme_color_override("font_color", Color(0.75, 0.7, 0.5, 0.9))
 	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -116,75 +118,6 @@ func _build() -> void:
 	scrollbox.add_theme_constant_override("separation", 6)
 	scrollbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(scrollbox)
-
-	var upg_title := Label.new()
-	upg_title.text = "⚔  MELHORIAS"
-	upg_title.add_theme_font_size_override("font_size", 16)
-	upg_title.add_theme_color_override("font_color", Color(0.9, 0.75, 0.3))
-	scrollbox.add_child(upg_title)
-
-	# linhas de upgrade
-	for i in 6:
-		var row := Button.new()
-		row.custom_minimum_size = Vector2(530, 46)
-		row.flat = false
-		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		row.text = "  [%d]  %s  %s — %s" % [i + 1, ICONS[i], NAMES[i], DESCS[i]]
-
-		var row_sb := StyleBoxFlat.new()
-		row_sb.bg_color = Color(0.11, 0.16, 0.12, 0.95)
-		row_sb.border_color = Color(0.79, 0.64, 0.15, 0.85)
-		row_sb.set_border_width_all(1)
-		row_sb.border_width_left = 5
-		row_sb.set_corner_radius_all(8)
-		row_sb.content_margin_left = 12
-		row_sb.content_margin_right = 12
-		row_sb.set_content_margin_all(8)
-		row.add_theme_stylebox_override("normal", row_sb)
-
-		var row_hover := row_sb.duplicate()
-		row_hover.bg_color = Color(0.15, 0.22, 0.16, 0.98)
-		row_hover.border_color = Color(0.79, 0.64, 0.15, 0.9)
-		row.add_theme_stylebox_override("hover", row_hover)
-
-		var row_press := row_sb.duplicate()
-		row_press.bg_color = Color(0.2, 0.28, 0.18, 1)
-		row_press.border_color = Color(1, 0.9, 0.4)
-		row.add_theme_stylebox_override("pressed", row_press)
-
-		row.add_theme_color_override("font_color", Color(0.92, 0.94, 0.88))
-		row.add_theme_color_override("font_hover_color", Color.WHITE)
-		row.add_theme_color_override("font_pressed_color", MenuArt.GOLD)
-		row.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		row.add_theme_font_size_override("font_size", 15)
-
-		var cost := Label.new()
-		cost.name = "Cost"
-		cost.add_theme_font_size_override("font_size", 15)
-		cost.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		cost.position = Vector2(430, 10)
-		cost.custom_minimum_size = Vector2(90, 24)
-		cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(cost)
-
-		var owned := Label.new()
-		owned.name = "Owned"
-		owned.add_theme_font_size_override("font_size", 12)
-		owned.add_theme_color_override("font_color", Color(0.5, 0.85, 0.5))
-		owned.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		owned.position = Vector2(350, 12)
-		owned.custom_minimum_size = Vector2(70, 20)
-		owned.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(owned)
-
-		var idx := i
-		row.pressed.connect(func(): _on_buy(idx))
-		scrollbox.add_child(row)
-		_rows.append(row)
-
-	var item_sep := HSeparator.new()
-	item_sep.add_theme_color_override("separator", Color(0.79, 0.64, 0.15, 0.35))
-	scrollbox.add_child(item_sep)
 
 	var item_title := Label.new()
 	item_title.text = "✦  ITENS DA LOJA"
@@ -210,10 +143,11 @@ func _build() -> void:
 	for i in _shop_items.size():
 		var it: Item = _shop_items[i]
 		var row := Button.new()
-		row.custom_minimum_size = Vector2(530, 32)
+		row.custom_minimum_size = Vector2(530, 54)
 		row.flat = false
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		row.text = "  [%s]  %s  %s — %s" % [_item_keys[i], item_icons[i], it.name, it.description]
+		row.text = "  [%s]  %s  %s\n          %s" % [_item_keys[i], item_icons[i], it.name, it.description]
+		row.tooltip_text = it.description
 
 		var row_sb := StyleBoxFlat.new()
 		row_sb.bg_color = Color(0.1, 0.14, 0.18, 0.95)
@@ -238,15 +172,18 @@ func _build() -> void:
 		row.add_theme_color_override("font_color", Color(0.88, 0.93, 0.96))
 		row.add_theme_color_override("font_hover_color", Color.WHITE)
 		row.add_theme_color_override("font_pressed_color", MenuArt.GOLD)
-		row.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		row.add_theme_stylebox_override("focus", ForestUI.style(Color(0,0,0,0), ForestUI.GOLD,0))
 		row.add_theme_font_size_override("font_size", 14)
 
 		var cost := Label.new()
 		cost.name = "Cost"
 		cost.add_theme_font_size_override("font_size", 14)
 		cost.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		cost.position = Vector2(430, 6)
-		cost.custom_minimum_size = Vector2(90, 22)
+		cost.offset_left = -95
+		cost.offset_right = -14
+		cost.offset_top = 10
+		cost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cost.custom_minimum_size = Vector2(80,22)
 		cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(cost)
 
@@ -256,7 +193,7 @@ func _build() -> void:
 		_item_rows.append(row)
 
 	var footer := Label.new()
-	footer.text = "1-6 melhorias | 7/8/9/0/Q/R itens | TAB/ESC fechar — inimigos dropam ouro!"
+	footer.text = "7/8/9/0/Q/R comprar itens  •  TAB/ESC fechar"
 	footer.add_theme_font_size_override("font_size", 12)
 	footer.add_theme_color_override("font_color", Color(0.7, 0.75, 0.68, 0.85))
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -273,7 +210,7 @@ func open() -> void:
 	visible = true
 	_refresh()
 	var panel := get_node("Center/Panel")
-	panel.pivot_offset = Vector2(290, 300)
+	panel.pivot_offset = Vector2(290, 290)
 	panel.scale = Vector2(0.92, 0.92)
 	panel.modulate = Color(1, 1, 1, 0.6)
 	var tw := create_tween().set_parallel(true)
@@ -306,18 +243,6 @@ func _refresh() -> void:
 		p.weapon.name if p.weapon else "—",
 		p.armor.name if p.armor else "—",
 	]
-	for i in _rows.size():
-		var row := _rows[i]
-		var cost := p.upgrade_cost(i)
-		var can := p.gold >= cost
-		var cost_lbl: Label = row.get_node("Cost")
-		var owned_lbl: Label = row.get_node("Owned")
-		cost_lbl.text = "%d ⬤" % cost
-		cost_lbl.add_theme_color_override("font_color",
-			Color(1, 0.85, 0.3) if can else Color(0.85, 0.4, 0.35))
-		var n: int = p.upgrade_counts[i]
-		owned_lbl.text = ("x%d" % n) if n > 0 else ""
-		row.modulate = Color.WHITE if can else Color(0.55, 0.55, 0.6)
 	for i in _item_rows.size():
 		var row := _item_rows[i]
 		var it: Item = _shop_items[i]
@@ -327,12 +252,6 @@ func _refresh() -> void:
 		cost_lbl.add_theme_color_override("font_color",
 			Color(1, 0.85, 0.3) if can else Color(0.85, 0.4, 0.35))
 		row.modulate = Color.WHITE if can else Color(0.55, 0.55, 0.6)
-
-func _on_buy(idx: int) -> void:
-	if main == null:
-		return
-	main.try_buy_upgrade(idx)
-	_refresh()
 
 func _on_buy_item(idx: int) -> void:
 	if main == null or main.player == null:
@@ -357,9 +276,6 @@ func handle_key(key: int) -> bool:
 		return false
 	if key == KEY_TAB or key == KEY_ESCAPE:
 		close()
-		return true
-	if key >= KEY_1 and key <= KEY_6:
-		_on_buy(key - KEY_1)
 		return true
 	# itens: 7-9 e 0 (teclas numéricas do teclado principal)
 	match key:

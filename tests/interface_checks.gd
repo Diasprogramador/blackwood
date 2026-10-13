@@ -82,6 +82,36 @@ func run() -> void:
 	game._update_touch()
 	await shot(output.path_join("hud-mobile.png"))
 	assert(not game.hud._actions.attack.visible and game.touch_ui.visible,"Desktop hit targets must not intercept the customized touch HUD")
+	game.player.channeling = false
+	game.player.gain_exp(game.player.exp_to_next())
+	await create_timer(0.25).timeout
+	assert(paused and game.state == game.State.UPGRADE)
+	assert(not game.touch_ui.visible)
+	await shot(output.path_join("level-choices-mobile.png"))
+	for button in game.upgrade_menu._buttons:
+		assert(button.get_global_rect().end.x <= game.upgrade_menu.size.x)
+		assert(button.get_global_rect().end.y <= game.upgrade_menu.size.y)
+	var picked: String = game._current_offers[1].id
+	await click(game.upgrade_menu._buttons[1])
+	assert(not paused and game.player.run_upgrade_counts.get(picked,0) == 1)
+	game._open_shop()
+	await shot(output.path_join("provisions-mobile.png"))
+	assert(game.shop._rows.is_empty())
+	var gold: int = game.player.gold
+	game.shop.handle_key(KEY_1)
+	game.try_buy_upgrade(0)
+	assert(game.player.gold == gold and game.player.upgrade_counts[0] == 0)
+	game._close_shop()
+	DisplayServer.window_set_size(Vector2i(1280,720))
+	game.player.gain_exp(game.player.exp_to_next())
+	await create_timer(0.25).timeout
+	await shot(output.path_join("level-choices-desktop.png"))
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_1
+	key.pressed = true
+	root.push_input(key,true)
+	await process_frame
+	assert(not paused and game.state == game.State.PLAY)
 	game.queue_free()
 	await process_frame
 	var canvas := Node2D.new()

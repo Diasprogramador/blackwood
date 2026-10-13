@@ -46,10 +46,11 @@ atacar manualmente; habilidades usam as teclas 1–5. No solo, Shift executa uma
 esquiva na direção do movimento (ou na última direção), com recarga de 1,6 s.
 No touch, o botão principal é ESQUIVA e o layout continua personalizável.
 
-Os cristais de XP mantêm a progressão de nível, agora **sem pausa e sem escolhas
-de melhorias gratuitas**. Não há bônus de aura, múltiplos alvos ou velocidade
-concedidos ao subir de nível. A vida máxima cresce de forma linear, e vida/mana
-recuperam apenas a capacidade acrescentada pelo nível. A primeira subida exige
+Os cristais de XP oferecem uma escolha gratuita de poder por nível no solo.
+Escolha entre três dádivas com o combate pausado: ataque, velocidade, golpes
+ramificados, aura ou vida. Cada poder tem limite de acúmulo. A loja vende itens;
+a tabela de atributos comprados com ouro foi removida. A vida base cresce
+linearmente, com recuperação limitada ao subir de nível. A primeira subida exige
 36 XP. A loja da partida e os desbloqueios permanentes continuam disponíveis.
 
 No desktop, clique nas habilidades, esquiva, item, mana, loja e pausa no HUD.
@@ -155,3 +156,9 @@ Cobre um obstáculo em U, nove rotas de florestas geradas, colisão da esquiva,
 orientação vertical, arraste/escala do HUD e serialização da personalização.
 Os pacotes Android mantêm o identificador e certificado da versão 0.4.0.
 A instalação e o co-op em aparelhos Android físicos ainda precisam de teste real.
+
+## Correção 0.7.1 — Dádivas do Bosque
+A remoção da 0.7.0 foi corrigida: voltam as escolhas gratuitas de nível no solo,
+com cartas ilustradas, graus e controles por toque, mouse e teclado. Sai a tabela
+de melhorias por ouro, inclusive seus atalhos e pedidos de rede. A loja mantém
+itens, preços visíveis e botão de fechar. O co-op mantém o fluxo contínuo existente.

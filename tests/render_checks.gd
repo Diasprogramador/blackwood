@@ -27,6 +27,9 @@ func run() -> void:
 	game.player.gain_exp(36)
 	for i in 18:
 		await process_frame
+	assert(paused and game.state == game.State.UPGRADE)
+	game._choose_run_upgrade(game._current_offers[0].id)
+	await process_frame
 	assert(not paused and game.state == game.State.PLAY)
 	await capture(output.path_join("blackwood-combate.png"))
 	await process_frame
@@ -57,6 +60,8 @@ func run() -> void:
 		await process_frame
 		if i > 60:
 			samples.append((Time.get_ticks_usec() - before) / 1000.0)
+		if game.state == game.State.UPGRADE:
+			game._choose_run_upgrade(game._current_offers[0].id)
 		peak_enemies = maxi(peak_enemies, game.enemies.size())
 		if i == 250:
 			await capture(output.path_join("blackwood-teste-estresse.png"))
@@ -83,7 +88,7 @@ func run() -> void:
 	for i in 5:
 		await process_frame
 	await capture(output.path_join("blackwood-derrota.png"))
-	print("RENDER_CHECKS passed: cached maps, uninterrupted level up, combat, stage regeneration, defeat")
+	print("RENDER_CHECKS passed: cached maps, level choices and resume, combat, stage regeneration, defeat")
 	game.queue_free()
 	await process_frame
 	await create_timer(0.5).timeout

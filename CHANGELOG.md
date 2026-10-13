@@ -1,3 +1,14 @@
+## 0.7.1 — Dádivas do Bosque
+
+- Corrige a interpretação da atualização anterior: remove a tabela de atributos
+  comprados por ouro e restaura escolhas gratuitas ao subir de nível no solo.
+- Nova tela de dádivas com símbolos desenhados, descrição, grau e limite,
+  seleção por teclado/mouse/toque e fila para múltiplos níveis.
+- Compras antigas de atributos bloqueadas também pelo backend/rede.
+- Loja de itens com preços corrigidos, foco visível e botão de fechar no mobile.
+- Mantém crescimento linear e recuperação limitada; co-op segue contínuo.
+- Windows e Android (versionCode 7), preservando assinatura de atualização.
+
 # Blackwood 0.7.0 — Fronteira de Ferro
 
 - Seleção de mapas com miniaturas dos biomas, seus chefes e indicação de bloqueio.
