@@ -162,3 +162,10 @@ A remoção da 0.7.0 foi corrigida: voltam as escolhas gratuitas de nível no so
 com cartas ilustradas, graus e controles por toque, mouse e teclado. Sai a tabela
 de melhorias por ouro, inclusive seus atalhos e pedidos de rede. A loja mantém
 itens, preços visíveis e botão de fechar. O co-op mantém o fluxo contínuo existente.
+
+## Áudio — 0.7.2
+A trilha original **Vozes do Bosque** toca no login e nos menus. Ela desaparece
+gradualmente ao iniciar uma partida. Música, efeitos e volume geral podem ser
+ajustados separadamente nas configurações. Os ataques têm timbres por classe;
+esquiva, dano, poções e resultados ganharam novos efeitos. Código de síntese e
+origem dos arquivos em `tools/generate_audio.py` e `assets/audio/README.md`.

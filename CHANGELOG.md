@@ -1,3 +1,12 @@
+## 0.7.2 — Vozes do Bosque
+
+- Trilha instrumental original no login, perfil e menus de preparação.
+- Loop contínuo com entrada suave e saída gradual ao iniciar a partida.
+- 18 efeitos novos, com timbres distintos para cada classe, esquiva e dano.
+- Pequena variação nos ataques, limite de vozes e volumes independentes.
+- Efeitos de classe também reproduzidos pelos eventos visuais no cliente co-op.
+- Android versionCode 8, com a assinatura das versões anteriores.
+
 ## 0.7.1 — Dádivas do Bosque
 
 - Corrige a interpretação da atualização anterior: remove a tabela de atributos

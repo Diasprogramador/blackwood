@@ -116,6 +116,9 @@ func _ready() -> void:
 	settings = GameSettings.load_data()
 	GameSettings.apply_video(settings)
 	Sfx.ensure_buses(settings)
+	var soundtrack := MenuMusic.new()
+	soundtrack.name = "MenuMusic"
+	add_child(soundtrack)
 	Profiles.ensure()
 
 	netplay = Netplay.new()
@@ -1825,6 +1828,12 @@ func mp_apply_shot(from: Vector2, dir: Vector2, speed: float, dmg: int, col: Col
 	Sfx.play(self, "shoot", -10.0)
 
 func mp_apply_fx(fx_type: int, x: float, y: float, s: float, ang: float = 0.0) -> void:
+	if fx_type >= AttackEffect.ROLE_FX_BASE and fx_type < AttackEffect.ROLE_HEAL_BASE:
+		var family := (fx_type - AttackEffect.ROLE_FX_BASE) / AttackEffect.SLOTS
+		var slot := (fx_type - AttackEffect.ROLE_FX_BASE) % AttackEffect.SLOTS
+		Sfx.play(self, "ultimate" if slot == 5 else AttackEffect.ROLES[family], -3.0)
+	elif fx_type >= AttackEffect.ROLE_HEAL_BASE:
+		Sfx.play(self,"potion",-4.0)
 	if AttackEffect.live >= AttackEffect.MAX_LIVE and fx_type < AttackEffect.ROLE_HEAL_BASE:
 		return
 	fx_layer.add_child(AttackEffect.new(fx_type, x, y, ang, s))
@@ -2045,7 +2054,7 @@ func _do_basic_attack(pl: Player = null, automatic: bool = false) -> void:
 			Color(1, 0.85, 0.2) if hit.crit else Color(1, 1, 0.5), 15 if hit.crit else 12)
 		if not target.is_alive():
 			_on_enemy_killed(target)
-	Sfx.play(self, "hit", -8.0)
+	Sfx.play(self, q.role, -3.0)
 
 func _tick_aura(pl: Player, delta: float) -> void:
 	if pl.aura_rank <= 0:
@@ -2077,6 +2086,7 @@ func _do_cast(index: int, pl: Player = null) -> void:
 	if not result.get("ok", false):
 		say(result.get("reason", "Sem mana / em cooldown!"))
 		return
+	Sfx.play(self, "ultimate" if index >= 4 else q.role, -2.0)
 	if result.kind == "heal":
 		_spawn_heal(q.position, q.role)
 		_spawn_skill_vfx(q.role, _slot_vfx(index), q.position, index >= 4)

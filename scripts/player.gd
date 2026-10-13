@@ -409,6 +409,7 @@ func try_dash() -> bool:
 	_dash_direction = vel.normalized() if vel.length_squared() > 1.0 else look_direction
 	if touch_move != Vector2.ZERO:
 		_dash_direction = touch_move.normalized()
+	Sfx.play(self, "dash", -3.0)
 	dash_t = 0.16
 	dash_cd = 1.6
 	invulnerable_t = 0.22
@@ -425,6 +426,7 @@ func take_damage(raw: int) -> int:
 		return 0
 	var reduction := defense / float(defense + 100)
 	var final_d := maxi(1, int(raw * (1.0 - reduction)))
+	Sfx.play(self, "hurt", -4.0)
 	hp = maxi(0, hp - final_d)
 	hit_flash = 8
 	hurt_t = 0.3

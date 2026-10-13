@@ -1,10 +1,10 @@
 class_name Sfx
 extends Object
 
-## Efeitos sonoros procedurais (sem assets): tons gerados em código.
+## PCM original pré-renderizado: camadas de impacto, ar e harmônicos.
 ## Buses: Master (padrão) + Music + SFX. Volumes vêm do GameSettings.
 
-const RATE := 22050
+static var _variation := 0
 
 static var _cache := {}
 static var _last_played := {}
@@ -35,10 +35,10 @@ static func _set_bus_vol(bus: String, v: int) -> void:
 
 ## Toca um efeito (click, coin, hit, potion, levelup, victory, defeat, buy, error, shoot).
 static func play(parent: Node, id: String, vol_db: float = 0.0) -> void:
-	if parent == null:
+	if parent == null or not parent.is_inside_tree():
 		return
 	var now := Time.get_ticks_msec()
-	if _voices >= 16 or now - int(_last_played.get(id, -1000)) < 45:
+	if _voices >= 12 or now - int(_last_played.get(id, -1000)) < 65:
 		return
 	_last_played[id] = now
 	var stream: AudioStreamWAV = _sample(id)
@@ -47,7 +47,11 @@ static func play(parent: Node, id: String, vol_db: float = 0.0) -> void:
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
 	p.bus = "SFX"
-	p.volume_db = vol_db
+	p.volume_db = vol_db - 8.0
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
+	if id in ["hit","hurt","tank","assassin","mage","marksman","support","shoot","dash"]:
+		_variation = (_variation + 1) % 5
+		p.pitch_scale = 0.96 + _variation * 0.02
 	parent.add_child(p)
 	_voices += 1
 	p.tree_exiting.connect(func(): _voices -= 1)
@@ -55,66 +59,9 @@ static func play(parent: Node, id: String, vol_db: float = 0.0) -> void:
 	p.play()
 
 static func _sample(id: String) -> AudioStreamWAV:
-	if _cache.has(id):
-		return _cache[id]
-	var s: AudioStreamWAV = null
-	match id:
-		"click": s = _sweep(700.0, 900.0, 0.07, 0.5)
-		"coin": s = _sweep(1200.0, 1800.0, 0.12, 0.45)
-		"hit": s = _noise_hit(0.12)
-		"potion": s = _sweep(420.0, 640.0, 0.18, 0.4)
-		"levelup": s = _arp([523.0, 659.0, 784.0, 1046.0], 0.09, 0.45)
-		"victory": s = _arp([523.0, 659.0, 784.0, 1046.0, 1318.0], 0.14, 0.5)
-		"defeat": s = _arp([392.0, 330.0, 262.0, 196.0], 0.18, 0.5)
-		"buy": s = _arp([880.0, 1174.0], 0.08, 0.45)
-		"error": s = _sweep(220.0, 160.0, 0.15, 0.5)
-		"shoot": s = _sweep(900.0, 300.0, 0.12, 0.4)
-	if s:
-		_cache[id] = s
-	return s
-
-static func _mk(samples: PackedByteArray) -> AudioStreamWAV:
-	var w := AudioStreamWAV.new()
-	w.format = AudioStreamWAV.FORMAT_8_BITS
-	w.mix_rate = RATE
-	w.stereo = false
-	w.data = samples
-	return w
-
-static func _sweep(f0: float, f1: float, dur: float, vol: float) -> AudioStreamWAV:
-	var n := int(RATE * dur)
-	var bytes := PackedByteArray()
-	bytes.resize(n)
-	var phase := 0.0
-	for i in n:
-		var t := float(i) / float(maxi(1, n))
-		var f := lerpf(f0, f1, t)
-		phase += TAU * f / RATE
-		var env := sin(PI * t)  # ataque + decay suaves
-		bytes[i] = int(128 + 120 * vol * env * sin(phase))
-	return _mk(bytes)
-
-static func _arp(freqs: Array, note_dur: float, vol: float) -> AudioStreamWAV:
-	var per := int(RATE * note_dur)
-	var bytes := PackedByteArray()
-	bytes.resize(per * freqs.size())
-	var phase := 0.0
-	for k in freqs.size():
-		for i in per:
-			var t := float(i) / float(per)
-			phase += TAU * float(freqs[k]) / RATE
-			var env := sin(PI * minf(1.0, t * 1.15))
-			bytes[k * per + i] = int(128 + 120 * vol * env * sin(phase))
-	return _mk(bytes)
-
-static func _noise_hit(dur: float) -> AudioStreamWAV:
-	var n := int(RATE * dur)
-	var bytes := PackedByteArray()
-	bytes.resize(n)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 12345
-	for i in n:
-		var t := float(i) / float(maxi(1, n))
-		var env := (1.0 - t) * (1.0 - t)
-		bytes[i] = int(128 + 110 * 0.6 * env * (rng.randf() * 2.0 - 1.0))
-	return _mk(bytes)
+	if _cache.has(id): return _cache[id]
+	var path := "res://assets/audio/%s.wav" % id
+	if not ResourceLoader.exists(path): return null
+	var stream := load(path) as AudioStreamWAV
+	_cache[id] = stream
+	return stream
